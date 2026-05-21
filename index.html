@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>베이비로그 — 아기 돌봄 일지</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+  <!-- Toast Notification -->
+  <div id="toast" class="toast" role="alert" aria-live="polite"></div>
+
+  <!-- ── Setup Modal (first launch) ─────────────────────────── -->
+  <div id="setup-modal" class="modal-overlay active" role="dialog" aria-modal="true" aria-label="아기 정보 설정">
+    <div class="modal-card setup-modal-card">
+      <div class="setup-hero">
+        <div class="setup-icon">👶</div>
+        <h2>베이비로그에 오신 걸<br>환영해요!</h2>
+        <p>아기 정보를 입력하고 맞춤 정보를 받아보세요</p>
+      </div>
+      <form id="setup-form" class="setup-form" novalidate>
+        <div class="form-group">
+          <label for="baby-name-input">아기 이름</label>
+          <input type="text" id="baby-name-input" placeholder="예: 지우, 민준" maxlength="20" autocomplete="off">
+        </div>
+        <div class="form-group">
+          <label for="baby-birth-input">생년월일</label>
+          <input type="date" id="baby-birth-input">
+        </div>
+        <div class="form-group">
+          <label>성별</label>
+          <div class="gender-buttons">
+            <button type="button" class="gender-btn active" data-gender="girl">👧 여아</button>
+            <button type="button" class="gender-btn" data-gender="boy">👦 남아</button>
+          </div>
+        </div>
+        <button type="submit" class="btn-primary btn-full">시작하기 ✨</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- ── Add Log Modal ───────────────────────────────────────── -->
+  <div id="add-log-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-label="기록 추가">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3>기록 추가</h3>
+        <button class="modal-close" data-modal="add-log-modal" aria-label="닫기">✕</button>
+      </div>
+      <div class="log-type-tabs" id="log-type-tabs" role="tablist">
+        <button class="type-tab active" data-type="sleep" role="tab">😴 수면</button>
+        <button class="type-tab" data-type="feed" role="tab">🍼 수유</button>
+        <button class="type-tab" data-type="pee" role="tab">💧 소변</button>
+        <button class="type-tab" data-type="poop" role="tab">💩 대변</button>
+        <button class="type-tab" data-type="cry" role="tab">😢 울음</button>
+        <button class="type-tab" data-type="walk" role="tab">🌿 산책</button>
+      </div>
+      <div id="log-form-content" class="log-form-content"></div>
+    </div>
+  </div>
+
+  <!-- ── Health Log Modal ────────────────────────────────────── -->
+  <div id="health-log-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-label="건강 기록">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 id="health-modal-title">건강 기록</h3>
+        <button class="modal-close" data-modal="health-log-modal" aria-label="닫기">✕</button>
+      </div>
+      <div id="health-log-form" class="log-form-content"></div>
+    </div>
+  </div>
+
+  <!-- ── Main App ────────────────────────────────────────────── -->
+  <div id="app">
+
+    <!-- Header -->
+    <header class="app-header">
+      <div class="header-content">
+        <div id="header-baby-info" class="header-baby" role="button" tabindex="0" aria-label="아기 정보 편집">
+          <div class="header-avatar" id="header-avatar">👶</div>
+          <div>
+            <div class="header-name" id="header-name">베이비</div>
+            <div class="header-age" id="header-age">정보 설정 필요</div>
+          </div>
+        </div>
+        <div class="header-right">
+          <div class="header-date" id="header-date"></div>
+        </div>
+      </div>
+    </header>
+
+    <!-- Page Container -->
+    <main class="page-container" id="page-container">
+
+      <!-- ❶ HOME ───────────────────────────────────── -->
+      <section id="page-home" class="page active" aria-label="홈">
+        <div class="page-scroll">
+
+          <!-- Today Stats -->
+          <div class="section-card">
+            <h3 class="section-title">오늘의 요약</h3>
+            <div class="stats-grid">
+              <div class="stat-item sleep-item">
+                <div class="stat-icon">😴</div>
+                <div class="stat-value" id="stat-sleep">—</div>
+                <div class="stat-label">수면</div>
+              </div>
+              <div class="stat-item feed-item">
+                <div class="stat-icon">🍼</div>
+                <div class="stat-value" id="stat-feed">—</div>
+                <div class="stat-label">수유</div>
+              </div>
+              <div class="stat-item diaper-item">
+                <div class="stat-icon">🩹</div>
+                <div class="stat-value" id="stat-diaper">—</div>
+                <div class="stat-label">기저귀</div>
+              </div>
+              <div class="stat-item walk-item">
+                <div class="stat-icon">🌿</div>
+                <div class="stat-value" id="stat-walk">—</div>
+                <div class="stat-label">산책</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Quick Add -->
+          <div class="section-card">
+            <h3 class="section-title">빠른 기록</h3>
+            <div class="quick-grid">
+              <button class="quick-btn qbtn-sleep" data-type="sleep">
+                <span class="quick-icon">😴</span><span>수면</span>
+              </button>
+              <button class="quick-btn qbtn-feed" data-type="feed">
+                <span class="quick-icon">🍼</span><span>수유</span>
+              </button>
+              <button class="quick-btn qbtn-pee" data-type="pee">
+                <span class="quick-icon">💧</span><span>소변</span>
+              </button>
+              <button class="quick-btn qbtn-poop" data-type="poop">
+                <span class="quick-icon">💩</span><span>대변</span>
+              </button>
+              <button class="quick-btn qbtn-cry" data-type="cry">
+                <span class="quick-icon">😢</span><span>울음</span>
+              </button>
+              <button class="quick-btn qbtn-walk" data-type="walk">
+                <span class="quick-icon">🌿</span><span>산책</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Recent Logs -->
+          <div class="section-card">
+            <div class="section-header">
+              <h3 class="section-title">최근 기록</h3>
+              <button class="see-all-btn" data-page="timeline">전체보기 →</button>
+            </div>
+            <div id="recent-logs-list" class="recent-logs-list">
+              <div class="empty-state">
+                <div class="empty-icon">📋</div>
+                <p>아직 기록이 없어요<br>위 버튼으로 첫 기록을 남겨보세요!</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Today Alerts -->
+          <div class="section-card" id="alerts-card">
+            <h3 class="section-title">오늘의 알림 🔔</h3>
+            <div id="today-alerts" class="alerts-list"></div>
+          </div>
+
+        </div>
+      </section>
+
+      <!-- ❷ TIMELINE ───────────────────────────────── -->
+      <section id="page-timeline" class="page" aria-label="시간표">
+        <div class="date-nav">
+          <button class="date-nav-btn" id="prev-date" aria-label="이전 날">‹</button>
+          <span class="date-nav-title" id="timeline-date-display"></span>
+          <button class="date-nav-btn" id="next-date" aria-label="다음 날">›</button>
+        </div>
+        <div class="timeline-legend" role="list" aria-label="범례">
+          <span class="legend-item sleep-lg" role="listitem">😴 수면</span>
+          <span class="legend-item feed-lg" role="listitem">🍼 수유</span>
+          <span class="legend-item pee-lg" role="listitem">💧 소변</span>
+          <span class="legend-item poop-lg" role="listitem">💩 대변</span>
+          <span class="legend-item cry-lg" role="listitem">😢 울음</span>
+          <span class="legend-item walk-lg" role="listitem">🌿 산책</span>
+        </div>
+        <div class="timeline-scroll-wrapper" id="timeline-scroll-wrapper">
+          <div class="timeline-canvas" id="timeline-canvas">
+            <div class="tl-axis" id="tl-axis"></div>
+            <div class="tl-body" id="tl-body"></div>
+          </div>
+        </div>
+        <button class="fab-btn" id="timeline-add-btn" aria-label="기록 추가">+</button>
+      </section>
+
+      <!-- ❸ SCHEDULE ───────────────────────────────── -->
+      <section id="page-schedule" class="page" aria-label="스케줄">
+        <div class="cat-tabs" id="schedule-tabs" role="tablist">
+          <button class="cat-tab active" data-cat="all" role="tab">전체</button>
+          <button class="cat-tab" data-cat="vaccine" role="tab">💉 예방접종</button>
+          <button class="cat-tab" data-cat="formula" role="tab">🍼 분유</button>
+          <button class="cat-tab" data-cat="solid" role="tab">🥣 이유식</button>
+          <button class="cat-tab" data-cat="other" role="tab">📌 기타</button>
+        </div>
+        <div class="page-scroll" style="padding-top:8px;">
+          <div class="section-card">
+            <div class="todo-add-row">
+              <input type="text" id="todo-input" class="todo-input" placeholder="새 항목을 입력하세요..." autocomplete="off" aria-label="할 일 입력">
+              <select id="todo-cat-select" class="todo-cat-select" aria-label="카테고리 선택">
+                <option value="vaccine">💉 예방</option>
+                <option value="formula">🍼 분유</option>
+                <option value="solid">🥣 이유식</option>
+                <option value="other">📌 기타</option>
+              </select>
+              <button id="add-todo-btn" class="btn-primary" aria-label="추가">추가</button>
+            </div>
+          </div>
+          <div id="todo-list" class="todo-list" role="list" aria-label="할 일 목록">
+            <div class="empty-state" id="todo-empty">
+              <div class="empty-icon">✅</div>
+              <p>등록된 항목이 없어요<br>예방접종, 분유량 등을 추가해보세요!</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ❹ HEALTH ─────────────────────────────────── -->
+      <section id="page-health" class="page" aria-label="건강">
+        <div class="h-tabs" id="health-tabs" role="tablist">
+          <button class="h-tab active" data-htab="development" role="tab">발달체크</button>
+          <button class="h-tab" data-htab="logs" role="tab">건강기록</button>
+          <button class="h-tab" data-htab="medication" role="tab">복약정보</button>
+        </div>
+
+        <!-- Development Tab -->
+        <div id="dev-tab" class="h-section active page-scroll">
+          <div class="section-card">
+            <div id="dev-age-banner" class="dev-age-banner"></div>
+            <div id="milestone-list" class="milestone-list" role="list"></div>
+          </div>
+        </div>
+
+        <!-- Health Logs Tab -->
+        <div id="logs-tab" class="h-section page-scroll">
+          <div class="section-card">
+            <div class="section-header">
+              <h3 class="section-title">건강 기록</h3>
+              <button class="btn-secondary" id="add-health-btn">+ 추가</button>
+            </div>
+            <div id="health-logs-list" class="health-logs-list" role="list">
+              <div class="empty-state">
+                <div class="empty-icon">🌡️</div>
+                <p>건강 기록이 없어요<br>체온, 피부 발진 등을 기록해보세요</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Medication Tab -->
+        <div id="medication-tab" class="h-section page-scroll">
+          <div class="section-card">
+            <div class="section-header">
+              <h3 class="section-title">복약 정보</h3>
+              <button class="btn-secondary" id="add-med-btn">+ 추가</button>
+            </div>
+            <div id="medication-list" class="medication-list" role="list">
+              <div class="empty-state">
+                <div class="empty-icon">💊</div>
+                <p>복약 정보가 없어요<br>처방된 약 정보를 기록해보세요</p>
+              </div>
+            </div>
+          </div>
+          <div class="section-card">
+            <p class="info-note">💡 비대면 진료가 필요하시면 아래 서비스를 이용해보세요</p>
+            <div class="telehealth-links">
+              <div class="telehealth-card">
+                <span class="telehealth-icon">🏥</span>
+                <div>
+                  <strong>닥터나우</strong>
+                  <p>24시간 비대면 진료 서비스</p>
+                </div>
+              </div>
+              <div class="telehealth-card">
+                <span class="telehealth-icon">👨‍⚕️</span>
+                <div>
+                  <strong>올라케어</strong>
+                  <p>소아과 전문 비대면 상담</p>
+                </div>
+              </div>
+              <div class="telehealth-card">
+                <span class="telehealth-icon">📱</span>
+                <div>
+                  <strong>메디히어</strong>
+                  <p>소아청소년과 전문의 연결</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ❺ CHATBOT ────────────────────────────────── -->
+      <section id="page-chat" class="page page-chat-layout" aria-label="챗봇">
+        <div class="chat-bot-header">
+          <div class="bot-avatar-lg">🤱</div>
+          <div>
+            <div class="bot-name">베이비케어 도우미</div>
+            <div class="bot-status">💚 온라인 · 24시간 상담</div>
+          </div>
+        </div>
+        <div class="chat-messages" id="chat-messages" aria-live="polite" aria-label="채팅 메시지"></div>
+        <div class="quick-replies" id="quick-replies" aria-label="빠른 질문">
+          <button class="qr-btn" data-msg="예방접종 일정 알려줘">💉 예방접종</button>
+          <button class="qr-btn" data-msg="이유식 언제 시작해요?">🥣 이유식</button>
+          <button class="qr-btn" data-msg="월령별 분유량 알려줘">🍼 분유량</button>
+          <button class="qr-btn" data-msg="우리 아기 발달 알려줘">👶 발달정보</button>
+          <button class="qr-btn" data-msg="수면 교육 방법 알려줘">😴 수면교육</button>
+        </div>
+        <div class="chat-input-row">
+          <input type="text" id="chat-input" class="chat-input" placeholder="궁금한 것을 물어보세요..." autocomplete="off" aria-label="메시지 입력">
+          <button id="chat-send-btn" class="chat-send-btn" aria-label="전송">↑</button>
+        </div>
+      </section>
+
+    </main>
+
+    <!-- Bottom Navigation -->
+    <nav class="bottom-nav" id="bottom-nav" role="navigation" aria-label="하단 탭 메뉴">
+      <button class="nav-item active" data-page="home" aria-label="홈" aria-current="page">
+        <span class="nav-icon">🏠</span>
+        <span class="nav-label">홈</span>
+      </button>
+      <button class="nav-item" data-page="timeline" aria-label="시간표">
+        <span class="nav-icon">📅</span>
+        <span class="nav-label">시간표</span>
+      </button>
+      <button class="nav-item" data-page="schedule" aria-label="스케줄">
+        <span class="nav-icon">✅</span>
+        <span class="nav-label">스케줄</span>
+      </button>
+      <button class="nav-item" data-page="health" aria-label="건강">
+        <span class="nav-icon">❤️</span>
+        <span class="nav-label">건강</span>
+      </button>
+      <button class="nav-item" data-page="chat" aria-label="챗봇">
+        <span class="nav-icon">💬</span>
+        <span class="nav-label">챗봇</span>
+      </button>
+    </nav>
+
+  </div><!-- /#app -->
+
+  <script src="app.js"></script>
+</body>
+</html>
