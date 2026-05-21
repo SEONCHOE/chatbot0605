@@ -647,7 +647,8 @@ function renderDevelopment() {
 
   banner.innerHTML = `
     <h3>현재 ${ai.months}개월 (${ai.weeks}주)</h3>
-    <p>${STATE.baby.name}${koreanParticle(STATE.baby.name, '이의', '의')} 발달 체크리스트예요</p>`;
+    <p>${STATE.baby.name}${koreanParticle(STATE.baby.name, '이의', '의')} 발달 체크리스트예요</p>
+    ${makeExternalLinks(ai.months + '개월 아기 발달 장난감')}`;
 
   const milestones = getMilestones(ai.months);
   let html = '';
@@ -1112,11 +1113,14 @@ ${babyMonths !== null ? `<br>💡 <strong>${babyName}이는 ${babyMonths}개월<
       if (milestones.length > 0) {
         const g = milestones[0];
         const items = g.items.map(i => `<li>${i.text}</li>`).join('');
+        const sq = `${babyMonths}개월 아기 발달 장난감`;
         return `<h4>👶 ${babyName}이의 발달 체크 (${babyMonths}개월)</h4>
 <strong>${g.icon} 이 시기에 할 수 있어야 해요:</strong>
 <ul>${items}</ul>
 <br>💡 건강 탭 → 발달체크에서 체크리스트를 확인하고 기록할 수 있어요!<br><br>
-⚠️ 발달이 걱정된다면 <strong>소아과 전문의</strong>에게 상담받아보세요.`;
+⚠️ 발달이 걱정된다면 <strong>소아과 전문의</strong>에게 상담받아보세요.
+<br><br>🎮 <strong>이 시기 장난감 찾기:</strong>
+${makeExternalLinks(sq)}`;
       }
     }
     return `<h4>👶 주요 발달 이정표</h4>
@@ -1179,6 +1183,16 @@ ${babyMonths !== null ? `<br>💡 <strong>${babyName}이는 ${babyMonths}개월<
 💡 부모도 지치면 잠깐 자리를 비워 숨 고르기를 해요. 아기는 괜찮아요.`;
   }
 
+  // ── 장난감 / 교구 추천 ───────────────────────────────────
+  if (t.includes('장난감') || t.includes('교구') || t.includes('놀이') || t.includes('추천')) {
+    const sq = babyMonths !== null ? `${babyMonths}개월 아기 발달 장난감` : '아기 발달 장난감 추천';
+    return `<h4>🎮 ${babyMonths !== null ? babyMonths + '개월 ' : ''}아기 장난감 추천</h4>
+<strong>이 시기 발달에 좋은 장난감:</strong>
+${getToySuggestions(babyMonths)}
+<br>🔍 <strong>직접 찾아보기:</strong>
+${makeExternalLinks(sq)}`;
+  }
+
   // ── 영아 안전 ─────────────────────────────────────────────
   if (t.includes('안전') || t.includes('사고') || t.includes('추락') || t.includes('질식')) {
     return `<h4>🛡️ 영아 안전 수칙</h4>
@@ -1237,6 +1251,27 @@ function closeModal(id) {
 }
 
 // ── Escape HTML ───────────────────────────────────────────────
+function makeExternalLinks(query) {
+  const yt = 'https://www.youtube.com/results?search_query=' + encodeURIComponent(query);
+  const dg = 'https://www.daangn.com/search/' + encodeURIComponent(query);
+  const mg = 'https://momguide.co.kr/search/?q=' + encodeURIComponent(query);
+  return '<div class="ext-links">' +
+    '<a class="ext-btn ext-youtube" href="' + yt + '" target="_blank" rel="noopener noreferrer">🎬 YouTube</a>' +
+    '<a class="ext-btn ext-daangn" href="' + dg + '" target="_blank" rel="noopener noreferrer">🥕 당근마켓</a>' +
+    '<a class="ext-btn ext-momsguide" href="' + mg + '" target="_blank" rel="noopener noreferrer">🧴 맘가이드</a>' +
+    '</div>';
+}
+
+function getToySuggestions(months) {
+  if (months === null) return '<ul><li>월령에 맞는 장난감을 추천해드려요</li></ul>';
+  if (months < 3)  return '<ul><li>🎠 흑백 모빌 (시각 발달)</li><li>🔔 딸랑이 (청각 발달)</li><li>🧸 소프트 토이</li></ul>';
+  if (months < 6)  return '<ul><li>🦷 치발기 (구강기)</li><li>📖 흑백 헝겊 책</li><li>🤸 배 놀이 매트</li></ul>';
+  if (months < 9)  return '<ul><li>🎯 오뚝이</li><li>🎵 버튼 소리 장난감</li><li>🧱 소프트 블록</li></ul>';
+  if (months < 12) return '<ul><li>🧩 소프트 블록 세트</li><li>🎹 피아노 매트</li><li>🏀 천 공</li></ul>';
+  if (months < 18) return '<ul><li>🚗 끌차/밀차</li><li>🧩 간단한 퍼즐 (4~6조각)</li><li>🏺 모양 맞추기 장난감</li></ul>';
+  return '<ul><li>🎭 역할놀이 세트</li><li>🧱 큰 블록 (듀플로 등)</li><li>🖍️ 유아용 크레용 + 스케치북</li></ul>';
+}
+
 function koreanParticle(name, withConsonant, withVowel) {
   if (!name) return withVowel;
   const code = name.charCodeAt(name.length - 1);

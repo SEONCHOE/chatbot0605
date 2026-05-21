@@ -967,3 +967,30 @@ body { display: flex; justify-content: center; }
 .toast.show {
   opacity: 1; transform: translateX(-50%) translateY(0);
 }
+
+/* ── External App Links ──────────────────────────────────── */
+.ext-links {
+  display: flex; gap: var(--sp-xs);
+  margin-top: var(--sp-sm);
+  flex-wrap: wrap;
+}
+.ext-btn {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 6px 12px; border-radius: var(--r-pill);
+  font-size: 12px; font-weight: 700;
+  text-decoration: none;
+  transition: opacity .15s, transform .1s;
+  white-space: nowrap;
+}
+.ext-btn:active { opacity: .75; transform: scale(.95); }
+.ext-youtube   { background: #fff0f0; color: #c00000; }
+.ext-daangn    { background: #fff3eb; color: #e85c00; }
+.ext-momsguide { background: var(--lime-pale); color: #3a8033; }
+
+/* On gradient banner: white semi-transparent buttons */
+.dev-age-banner .ext-links { justify-content: center; margin-top: 10px; }
+.dev-age-banner .ext-btn {
+  background: rgba(255,255,255,.22);
+  color: #fff;
+  border: 1px solid rgba(255,255,255,.35);
+}
