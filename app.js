@@ -143,7 +143,7 @@ let currentPage = 'home';
 
 function navigate(page) {
   if (page === 'info') {
-    window.location.href = '../youtube_trend/dist/index.html';
+    window.location.href = './youtube_trend.html';
     return;
   }
   if (currentPage === page) return;
