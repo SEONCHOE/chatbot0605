@@ -1,5 +1,7 @@
 {
-  "buildCommand": "",
-  "outputDirectory": ".",
-  "installCommand": ""
+  "functions": {
+    "api/search.js": {
+      "memory": 512
+    }
+  }
 }

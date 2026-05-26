@@ -1,0 +1,13 @@
+# RAG 원본 소스 데이터 (PDF/TXT) - 용량 과다로 제외
+data_for_RAG/*.pdf
+data_for_RAG/*.txt
+
+# 전처리 스크립트 (배포 불필요)
+build_rag.py
+
+# 대화 내보내기
+conversation-*.txt
+
+# OS / 에디터
+.DS_Store
+Thumbs.db

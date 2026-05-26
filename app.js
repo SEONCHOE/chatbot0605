@@ -1192,75 +1192,23 @@ function handleVoiceChat(transcript) {
   }, 200);
 }
 
-// ── RAG 지식베이스 ────────────────────────────────────────────
-let RAG_CHUNKS  = null;   // [{id, text, metadata}]
-let RAG_FIGURES = null;   // [{id, title, caption, image, metadata}]
+// ── RAG 검색 API 호출 ─────────────────────────────────────────
+// 서버(/api/search)에서 검색 → 결과(~2KB)만 반환
+// 클라이언트는 2.2MB JSON을 다운받지 않음
 
-async function loadRagData() {
-  if (RAG_CHUNKS) return;
+async function searchRAG(query) {
   try {
-    const [cr, fr] = await Promise.all([
-      fetch('data_for_RAG/processed/rag_chunks.json').then(r => r.json()),
-      fetch('data_for_RAG/processed/rag_figures.json').then(r => r.json()),
-    ]);
-    RAG_CHUNKS  = cr;
-    RAG_FIGURES = fr;
+    const res = await fetch('/api/search', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ query, topChunks: 5, topFigures: 3 }),
+    });
+    if (!res.ok) throw new Error(`API ${res.status}`);
+    return await res.json();   // { chunks, figures }
   } catch (e) {
-    RAG_CHUNKS  = [];
-    RAG_FIGURES = [];
-    console.warn('RAG 데이터 로드 실패:', e);
+    console.warn('RAG API 실패, 빈 결과 반환:', e);
+    return { chunks: [], figures: [] };
   }
-}
-
-// TF-IDF 간략 구현 (IDF 없이 TF + 키워드 가중치)
-function tokenize(text) {
-  return text
-    .toLowerCase()
-    .replace(/[^가-힣a-z0-9\s]/g, ' ')
-    .split(/\s+/)
-    .filter(t => t.length > 1);
-}
-
-function buildQueryTokens(query) {
-  const tokens = tokenize(query);
-  const freq   = {};
-  tokens.forEach(t => { freq[t] = (freq[t] || 0) + 1; });
-  return freq;
-}
-
-function cosineSim(queryFreq, docText) {
-  const docTokens = tokenize(docText);
-  const docFreq   = {};
-  docTokens.forEach(t => { docFreq[t] = (docFreq[t] || 0) + 1; });
-
-  let dot = 0, qNorm = 0, dNorm = 0;
-  for (const [t, qf] of Object.entries(queryFreq)) {
-    dot   += qf * (docFreq[t] || 0);
-    qNorm += qf * qf;
-  }
-  for (const df of Object.values(docFreq)) dNorm += df * df;
-  if (!qNorm || !dNorm) return 0;
-  return dot / (Math.sqrt(qNorm) * Math.sqrt(dNorm));
-}
-
-function searchChunks(query, topK = 5) {
-  if (!RAG_CHUNKS?.length) return [];
-  const qFreq = buildQueryTokens(query);
-  return RAG_CHUNKS
-    .map(c => ({ ...c, score: cosineSim(qFreq, c.text) }))
-    .filter(c => c.score > 0)
-    .sort((a, b) => b.score - a.score)
-    .slice(0, topK);
-}
-
-function searchFigures(query, topK = 3) {
-  if (!RAG_FIGURES?.length) return [];
-  const qFreq = buildQueryTokens(query);
-  return RAG_FIGURES
-    .map(f => ({ ...f, score: cosineSim(qFreq, f.title + ' ' + f.caption) }))
-    .filter(f => f.score > 0.05)
-    .sort((a, b) => b.score - a.score)
-    .slice(0, topK);
 }
 
 // 출처 렌더링 (답변 하단에 붙임)
@@ -1298,13 +1246,12 @@ function renderSources(chunks, figures) {
   </div>`;
 }
 
-// RAG Chat Agent: 검색 → GPT 답변 생성 → 출처 렌더링
+// RAG Chat Agent: 검색(서버) → GPT 답변 생성 → 출처 렌더링
 async function ragChatAgent(userQuery) {
-  await loadRagData();
-
   const oaKey = localStorage.getItem('openai_api_key') || '';
-  const chunks  = searchChunks(userQuery, 5);
-  const figures = searchFigures(userQuery, 3);
+
+  // 서버에서 관련 청크 검색 (~2KB 응답)
+  const { chunks, figures } = await searchRAG(userQuery);
 
   const babyMonths = STATE.baby ? (getAgeInfo(STATE.baby.birthDate)?.months ?? null) : null;
   const babyName   = STATE.baby?.name || '아기';
