@@ -1562,6 +1562,148 @@ function maybeAddSampleTodos() {
   saveState();
 }
 
+// ── MILESTONE CALENDAR ────────────────────────────────────────
+
+const MILESTONES = [
+  { m: 0,  label: 'BCG 접종',                       sub: '출생 후 4주 이내',              type: 'vaccine' },
+  { m: 0,  label: 'B형간염 1차',                    sub: '출생 직후',                     type: 'vaccine' },
+  { m: 1,  label: 'B형간염 2차',                    sub: '생후 1개월',                    type: 'vaccine' },
+  { m: 1,  label: '영유아검진 1차',                  sub: '생후 1개월',                    type: 'check' },
+  { m: 2,  label: 'DTaP·Hib·PCV·폴리오 1차',        sub: '생후 2개월 — 4종 동시접종',     type: 'vaccine' },
+  { m: 2,  label: '로타바이러스 1차',                sub: '생후 2개월',                    type: 'vaccine' },
+  { m: 2,  label: '영유아검진 2차',                  sub: '생후 2개월',                    type: 'check' },
+  { m: 4,  label: 'DTaP·Hib·PCV·폴리오 2차',        sub: '생후 4개월 — 4종 동시접종',     type: 'vaccine' },
+  { m: 4,  label: '로타바이러스 2차',                sub: '생후 4개월',                    type: 'vaccine' },
+  { m: 4,  label: '영유아검진 3차',                  sub: '생후 4개월',                    type: 'check' },
+  { m: 6,  label: 'DTaP·Hib·PCV·폴리오·HepB 3차',   sub: '생후 6개월 — 5종 동시접종',     type: 'vaccine' },
+  { m: 6,  label: '로타바이러스 3차',                sub: '생후 6개월 (해당 제품만)',       type: 'vaccine' },
+  { m: 6,  label: '이유식 시작',                     sub: '쌀미음부터 권고, 1일 1회',       type: 'food' },
+  { m: 6,  label: '영유아검진 4차',                  sub: '생후 6개월',                    type: 'check' },
+  { m: 7,  label: '중기 이유식',                     sub: '7~9개월, 다양한 식재료 도입',    type: 'food' },
+  { m: 9,  label: '영유아검진 5차',                  sub: '생후 9개월',                    type: 'check' },
+  { m: 10, label: '후기 이유식',                     sub: '10~12개월, 죽→진밥 전환',       type: 'food' },
+  { m: 12, label: 'MMR·수두·Hib·PCV 4차',           sub: '생후 12~15개월',                type: 'vaccine' },
+  { m: 12, label: 'A형간염 1차',                     sub: '생후 12~23개월',                type: 'vaccine' },
+  { m: 12, label: '일본뇌염 1차',                    sub: '생후 12개월',                   type: 'vaccine' },
+  { m: 12, label: '완료기 이유식',                   sub: '12개월~, 가족 식사 함께 시작',   type: 'food' },
+  { m: 12, label: '영유아검진 6차',                  sub: '생후 12개월',                   type: 'check' },
+  { m: 15, label: 'DTaP 4차',                        sub: '생후 15~18개월',                type: 'vaccine' },
+  { m: 18, label: '영유아검진 7차',                  sub: '생후 18개월',                   type: 'check' },
+  { m: 24, label: 'A형간염 2차',                     sub: '1차 접종 후 6개월',             type: 'vaccine' },
+  { m: 24, label: '일본뇌염 2차',                    sub: '1차 접종 후 1개월',             type: 'vaccine' },
+  { m: 24, label: '영유아검진 8차',                  sub: '생후 24개월',                   type: 'check' },
+  { m: 36, label: '영유아검진 9차',                  sub: '생후 36개월',                   type: 'check' },
+  { m: 48, label: 'DTaP 5차·폴리오 4차',             sub: '만 4~6세',                      type: 'vaccine' },
+  { m: 48, label: '영유아검진 10차',                 sub: '생후 48개월',                   type: 'check' },
+  { m: 54, label: '영유아검진 11차',                 sub: '생후 54개월',                   type: 'check' },
+  { m: 60, label: 'MMR 2차',                         sub: '만 4~6세',                      type: 'vaccine' },
+  { m: 66, label: '영유아검진 12차',                 sub: '생후 66개월',                   type: 'check' },
+];
+
+let calYear, calMonth;
+
+function getMilestonesForMonth(birthDateStr, year, month) {
+  const events = [];
+  for (const ms of MILESTONES) {
+    const d = new Date(birthDateStr);
+    d.setMonth(d.getMonth() + ms.m);
+    if (d.getFullYear() === year && d.getMonth() === month) {
+      events.push({ ...ms, date: new Date(d) });
+    }
+  }
+  return events.sort((a, b) => a.date - b.date);
+}
+
+function renderMilestoneCalendar() {
+  const gridEl    = document.getElementById('cal-grid');
+  const eventsEl  = document.getElementById('cal-events');
+  const labelEl   = document.getElementById('cal-month-label');
+  if (!gridEl) return;
+
+  const birthStr = STATE.baby?.birthDate || null;
+
+  if (!birthStr) {
+    gridEl.innerHTML = '';
+    eventsEl.innerHTML = '<div class="cal-no-baby">아기 정보를 먼저 등록해주세요 👶</div>';
+    labelEl.textContent = '';
+    return;
+  }
+
+  labelEl.textContent = `${calYear}년 ${calMonth + 1}월`;
+
+  const events = getMilestonesForMonth(birthStr, calYear, calMonth);
+  const dayEvents = {};
+  for (const ev of events) {
+    const d = ev.date.getDate();
+    if (!dayEvents[d]) dayEvents[d] = new Set();
+    dayEvents[d].add(ev.type);
+  }
+
+  const today      = new Date();
+  const firstDow   = new Date(calYear, calMonth, 1).getDay();
+  const daysInMon  = new Date(calYear, calMonth + 1, 0).getDate();
+  const daysInPrev = new Date(calYear, calMonth, 0).getDate();
+
+  let html = '';
+  for (let i = firstDow - 1; i >= 0; i--) {
+    html += `<div class="cal-cell other-month">${daysInPrev - i}</div>`;
+  }
+  for (let d = 1; d <= daysInMon; d++) {
+    const dow = new Date(calYear, calMonth, d).getDay();
+    const isToday = today.getFullYear() === calYear && today.getMonth() === calMonth && today.getDate() === d;
+    const cls = ['cal-cell'];
+    if (isToday) cls.push('today');
+    if (dow === 0) cls.push('sun');
+    if (dow === 6) cls.push('sat');
+    const dots = dayEvents[d]
+      ? '<div class="cal-dots">' + [...dayEvents[d]].map(t => `<div class="cal-dot dot-${t}"></div>`).join('') + '</div>'
+      : '';
+    html += `<div class="${cls.join(' ')}">${d}${dots}</div>`;
+  }
+  const filled = firstDow + daysInMon;
+  const tail = (7 - (filled % 7)) % 7;
+  for (let d = 1; d <= tail; d++) {
+    html += `<div class="cal-cell other-month">${d}</div>`;
+  }
+  gridEl.innerHTML = html;
+
+  if (events.length === 0) {
+    eventsEl.innerHTML = '<div class="cal-events-empty">이 달에는 일정이 없어요 🌱</div>';
+  } else {
+    const typeLabel = { vaccine: '💉 접종', food: '🥣 이유식', check: '🏥 검진' };
+    const rows = events.map(ev => {
+      const mm = ev.date.getMonth() + 1;
+      const dd = ev.date.getDate();
+      return `<div class="cal-event-item">
+        <div class="cal-event-date type-${ev.type}">${mm}월<br>${dd}일</div>
+        <div class="cal-event-info">
+          <div class="cal-event-label">${ev.label}</div>
+          <div class="cal-event-sub">${ev.sub}</div>
+        </div>
+        <div class="cal-event-badge type-${ev.type}">${typeLabel[ev.type]}</div>
+      </div>`;
+    }).join('');
+    eventsEl.innerHTML = `<div class="cal-events-title">이달의 일정 (${events.length}건)</div>` + rows;
+  }
+}
+
+function initMilestoneCalendar() {
+  const today = new Date();
+  calYear  = today.getFullYear();
+  calMonth = today.getMonth();
+
+  document.getElementById('cal-prev').addEventListener('click', () => {
+    if (--calMonth < 0) { calMonth = 11; calYear--; }
+    renderMilestoneCalendar();
+  });
+  document.getElementById('cal-next').addEventListener('click', () => {
+    if (++calMonth > 11) { calMonth = 0; calYear++; }
+    renderMilestoneCalendar();
+  });
+
+  renderMilestoneCalendar();
+}
+
 // ── Init ──────────────────────────────────────────────────────
 function init() {
   loadState();
@@ -1575,6 +1717,7 @@ function init() {
   updateHeader();
   renderHome();
   maybeAddSampleTodos();
+  initMilestoneCalendar();
 
   // Refresh header every minute
   setInterval(updateHeader, 60000);

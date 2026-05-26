@@ -231,6 +231,28 @@
               <p>등록된 항목이 없어요<br>예방접종, 분유량 등을 추가해보세요!</p>
             </div>
           </div>
+
+          <!-- 육아 달력 -->
+          <div class="section-card" id="milestone-cal-card">
+            <div class="section-header">
+              <h3 class="section-title">📅 육아 달력</h3>
+              <span class="cal-legend-row">
+                <span class="cal-legend-dot dot-vaccine"></span>접종
+                <span class="cal-legend-dot dot-food"></span>이유식
+                <span class="cal-legend-dot dot-check"></span>검진
+              </span>
+            </div>
+            <div class="cal-nav">
+              <button class="cal-nav-btn" id="cal-prev" aria-label="이전 달">‹</button>
+              <span class="cal-month-label" id="cal-month-label"></span>
+              <button class="cal-nav-btn" id="cal-next" aria-label="다음 달">›</button>
+            </div>
+            <div class="cal-grid-header">
+              <span>일</span><span>월</span><span>화</span><span>수</span><span>목</span><span>금</span><span>토</span>
+            </div>
+            <div class="cal-grid" id="cal-grid"></div>
+            <div class="cal-events" id="cal-events"></div>
+          </div>
         </div>
       </section>
 
