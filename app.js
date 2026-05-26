@@ -142,6 +142,10 @@ function showToast(msg) {
 let currentPage = 'home';
 
 function navigate(page) {
+  if (page === 'info') {
+    window.location.href = '../youtube_trend/dist/index.html';
+    return;
+  }
   if (currentPage === page) return;
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n => {
@@ -187,8 +191,8 @@ function updateHeader() {
 
 // ── HOME PAGE ─────────────────────────────────────────────────
 function renderHome() {
-  updateStats();
-  renderRecentLogs();
+  updateBabyHeroCard();
+  renderHomeUpcoming();
   renderAlerts();
 }
 
@@ -196,29 +200,75 @@ function getTodayLogs() {
   return (STATE.logs[todayStr()] || []);
 }
 
-function updateStats() {
-  const logs = getTodayLogs();
+function updateBabyHeroCard() {
+  const heroAvatar = document.getElementById('hero-avatar');
+  const heroName   = document.getElementById('hero-name');
+  const heroPills  = document.getElementById('hero-pills');
+  const bhsFeed    = document.getElementById('bhs-feed');
+  const bhsSleep   = document.getElementById('bhs-sleep');
+  const bhsDiaper  = document.getElementById('bhs-diaper');
+  if (!heroAvatar) return;
 
-  // sleep: sum durations
+  if (!STATE.baby) {
+    heroName.textContent = '베이비';
+    heroPills.innerHTML = '<span class="hero-pill">정보 설정 필요</span>';
+    bhsFeed.textContent = bhsSleep.textContent = bhsDiaper.textContent = '—';
+    return;
+  }
+
+  heroAvatar.textContent = STATE.baby.gender === 'boy' ? '👦' : '👧';
+  heroName.textContent = STATE.baby.name;
+
+  const ai = getAgeInfo(STATE.baby.birthDate);
+  if (ai) {
+    const ageText = ai.months < 1
+      ? `D+${ai.diffDays} · ${ai.weeks}주 ${ai.remDays}일`
+      : `${ai.months}개월 ${ai.monthRemDays}일`;
+    heroPills.innerHTML =
+      `<span class="hero-pill">${ageText}</span>` +
+      `<span class="hero-pill">${STATE.baby.gender === 'girl' ? '👧 여아' : '👦 남아'}</span>`;
+  }
+
+  const logs = getTodayLogs();
+  const feedCount = logs.filter(l => l.type === 'feed').length;
   let sleepMin = 0;
   logs.filter(l => l.type === 'sleep' && l.endTime).forEach(l => {
     let d = hmToMin(l.endTime) - hmToMin(l.startTime);
     if (d < 0) d += 1440;
     sleepMin += d;
   });
-  const sh = Math.floor(sleepMin/60), sm = sleepMin%60;
-
-  document.getElementById('stat-sleep').textContent =
-    sleepMin === 0 ? '—' : (sh > 0 ? `${sh}h ${sm}m` : `${sm}m`);
-
-  const feedCount = logs.filter(l => l.type === 'feed').length;
-  document.getElementById('stat-feed').textContent = feedCount > 0 ? `${feedCount}회` : '—';
-
+  const sh = Math.floor(sleepMin / 60), sm = sleepMin % 60;
   const diaperCount = logs.filter(l => l.type === 'pee' || l.type === 'poop').length;
-  document.getElementById('stat-diaper').textContent = diaperCount > 0 ? `${diaperCount}회` : '—';
 
-  const walkCount = logs.filter(l => l.type === 'walk').length;
-  document.getElementById('stat-walk').textContent = walkCount > 0 ? `${walkCount}회` : '—';
+  bhsFeed.textContent   = feedCount   || '—';
+  bhsSleep.textContent  = sleepMin === 0 ? '—' : (sh > 0 ? `${sh}h ${sm}m` : `${sm}m`);
+  bhsDiaper.textContent = diaperCount || '—';
+}
+
+function renderHomeUpcoming() {
+  const container = document.getElementById('home-upcoming-list');
+  if (!container) return;
+  const open = (STATE.todos || []).filter(t => !t.completed).slice(0, 3);
+  if (!open.length) {
+    container.innerHTML = `<div class="empty-state"><div class="empty-icon">📅</div><p>스케줄에서 항목을 추가해보세요</p></div>`;
+    return;
+  }
+  const catMeta = {
+    vaccine: { icon: '💉', cls: 'cat-vaccine', label: '예방접종' },
+    formula: { icon: '🍼', cls: 'cat-formula', label: '분유/수유' },
+    solid:   { icon: '🥣', cls: 'cat-solid',   label: '이유식' },
+    other:   { icon: '📌', cls: 'cat-other',   label: '기타' }
+  };
+  container.innerHTML = open.map(t => {
+    const c = catMeta[t.category] || catMeta.other;
+    return `<div class="upcoming-item">
+      <div class="upcoming-cat-icon ${c.cls}">${c.icon}</div>
+      <div class="upcoming-text">
+        <div class="upcoming-title">${escHtml(t.text)}</div>
+        <div class="upcoming-cat">${c.label}</div>
+      </div>
+    </div>`;
+  }).join('');
 }
 
 function renderRecentLogs() {
@@ -1305,6 +1355,7 @@ function handleSetup(e) {
   closeModal('setup-modal');
   updateHeader();
   renderHome();
+  updateBabyHeroCard();
   showToast(`👶 ${name}${koreanParticle(name, '이의', '의')} 기록을 시작해요!`);
 }
 
@@ -1330,9 +1381,24 @@ function attachEvents() {
     openModal('setup-modal');
   });
 
-  // Bottom nav
-  document.querySelectorAll('.nav-item').forEach(btn => {
+  // Hero edit button (same as header baby info)
+  document.getElementById('hero-edit-btn')?.addEventListener('click', () => {
+    if (STATE.baby) {
+      document.getElementById('baby-name-input').value = STATE.baby.name;
+      document.getElementById('baby-birth-input').value = STATE.baby.birthDate;
+      document.querySelectorAll('.gender-btn').forEach(b => b.classList.toggle('active', b.dataset.gender === STATE.baby.gender));
+    }
+    openModal('setup-modal');
+  });
+
+  // Bottom nav (data-page 있는 버튼만 — <a> 태그 제외)
+  document.querySelectorAll('.nav-item[data-page]').forEach(btn => {
     btn.addEventListener('click', () => navigate(btn.dataset.page));
+  });
+
+  // Center FAB: mic (STT — UI only for now)
+  document.getElementById('nav-fab-mic')?.addEventListener('click', () => {
+    showToast('🎤 음성 기록 기능은 준비중이에요!');
   });
 
   // Quick add buttons (home)
@@ -1340,9 +1406,9 @@ function attachEvents() {
     btn.addEventListener('click', () => openAddLog(btn.dataset.type));
   });
 
-  // See all button
-  document.querySelector('.see-all-btn').addEventListener('click', (e) => {
-    navigate(e.currentTarget.dataset.page);
+  // See all buttons (multiple)
+  document.querySelectorAll('.see-all-btn').forEach(btn => {
+    btn.addEventListener('click', () => navigate(btn.dataset.page));
   });
 
   // Log type tabs

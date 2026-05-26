@@ -968,6 +968,180 @@ body { display: flex; justify-content: center; }
   opacity: 1; transform: translateX(-50%) translateY(0);
 }
 
+/* ── Gaegu Handwritten Font ──────────────────────────────── */
+.hand {
+  font-family: 'Gaegu', -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', sans-serif;
+  font-weight: 700;
+}
+
+/* ── Baby Hero Card (홈 메인 카드) ────────────────────────── */
+.baby-hero-card {
+  background: linear-gradient(160deg, #FFE3C5 0%, #FFEFDA 50%, #ECF4D2 100%);
+  border-radius: var(--r-lg);
+  padding: 18px;
+  margin-bottom: var(--sp-md);
+  position: relative;
+  overflow: hidden;
+}
+.baby-hero-card::after {
+  content: '';
+  position: absolute; right: -30px; top: -40px;
+  width: 160px; height: 160px;
+  background: radial-gradient(circle, rgba(255,255,255,.55) 0%, transparent 65%);
+  pointer-events: none;
+}
+.baby-hero-top {
+  display: flex; align-items: center; gap: 14px;
+  margin-bottom: 16px;
+}
+.baby-face {
+  width: 62px; height: 62px; border-radius: 50%;
+  background: rgba(255,255,255,.8);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 34px;
+  box-shadow: 0 4px 14px rgba(0,0,0,.09);
+  flex-shrink: 0;
+}
+.baby-hero-info { flex: 1; min-width: 0; }
+.baby-hero-name {
+  font-size: 28px; line-height: 1; color: var(--text);
+  letter-spacing: -.02em;
+}
+.baby-hero-pills {
+  display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px;
+}
+.hero-pill {
+  background: rgba(255,255,255,.72);
+  padding: 3px 10px; border-radius: var(--r-pill);
+  font-size: 11.5px; font-weight: 600; color: var(--text-mid);
+}
+.hero-edit-btn {
+  width: 32px; height: 32px; border-radius: 50%;
+  background: rgba(255,255,255,.6);
+  display: flex; align-items: center; justify-content: center;
+  color: var(--text-mid); flex-shrink: 0;
+  transition: background .15s;
+}
+.hero-edit-btn:hover { background: rgba(255,255,255,.85); }
+
+.baby-hero-stats {
+  display: grid; grid-template-columns: 1fr 1px 1fr 1px 1fr;
+  background: rgba(255,255,255,.55); border-radius: var(--r-md);
+  padding: 12px 0;
+}
+.bhs-item {
+  display: flex; flex-direction: column; align-items: center; gap: 3px;
+}
+.bhs-val { font-size: 22px; line-height: 1; color: var(--text); }
+.bhs-lbl { font-size: 10.5px; color: var(--text-mid); font-weight: 600; }
+.bhs-divider { background: rgba(0,0,0,.08); width: 1px; margin: 6px 0; }
+
+/* ── Home Upcoming List (다가오는 일정) ───────────────────── */
+.home-upcoming-list { display: flex; flex-direction: column; gap: 8px; }
+.upcoming-item {
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 12px; background: var(--bg); border-radius: var(--r-sm);
+}
+.upcoming-cat-icon {
+  width: 38px; height: 38px; border-radius: 12px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 18px; flex-shrink: 0;
+}
+.upcoming-cat-icon.cat-vaccine { background: #E9F2FF; }
+.upcoming-cat-icon.cat-formula { background: var(--orange-pale); }
+.upcoming-cat-icon.cat-solid   { background: var(--lime-pale); }
+.upcoming-cat-icon.cat-other   { background: #FFF0F5; }
+.upcoming-text { flex: 1; min-width: 0; }
+.upcoming-title { font-size: 13.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.upcoming-cat  { font-size: 11px; color: var(--text-mid); margin-top: 2px; }
+
+/* ── Bottom Nav Redesign (7-col + center FAB) ────────────── */
+.bottom-nav {
+  height: var(--h-nav);
+  background: rgba(255,247,239,.96);
+  border-top: 1px solid var(--border);
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr 80px 1fr 1fr 1fr;
+  flex-shrink: 0; z-index: 10;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+/* override old flex-based nav-item */
+.nav-item {
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: flex-end;
+  gap: 3px; padding-bottom: 9px;
+  color: var(--text-light);
+  transition: color .2s;
+  position: relative;
+  text-decoration: none;
+}
+.nav-item:active { opacity: .7; }
+.nav-item.active { color: var(--orange); }
+.nav-item.active::after {
+  content: '';
+  position: absolute; top: 0; left: 50%;
+  transform: translateX(-50%);
+  width: 22px; height: 3px;
+  background: var(--gradient);
+  border-radius: 0 0 3px 3px;
+}
+.nav-svg { width: 22px; height: 22px; }
+.nav-label { font-size: 9px; font-weight: 700; letter-spacing: -.2px; }
+
+/* Center FAB area */
+.nav-center-area {
+  display: flex; align-items: flex-end;
+  justify-content: center;
+  padding-bottom: 8px;
+}
+.nav-fab-mic {
+  position: relative;
+  width: 52px; height: 52px; border-radius: 50%;
+  background: linear-gradient(135deg, #78C96E 0%, #95D088 100%);
+  color: white;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 6px 18px rgba(120,201,110,.45);
+  transform: translateY(-18px);
+  transition: transform .2s, box-shadow .2s;
+  border: 3px solid rgba(255,247,239,.9);
+}
+.nav-fab-mic:hover  { transform: translateY(-20px); box-shadow: 0 8px 22px rgba(120,201,110,.55); }
+.nav-fab-mic:active { transform: translateY(-14px) scale(.96); }
+/* pulse ring on mic button */
+.nav-fab-mic::after {
+  content: '';
+  position: absolute; inset: -6px; border-radius: 50%;
+  border: 2px solid rgba(120,201,110,.4);
+  animation: mic-pulse 2.4s ease-out infinite;
+  pointer-events: none;
+}
+@keyframes mic-pulse {
+  0%  { transform: scale(.85); opacity: .8; }
+  100%{ transform: scale(1.4);  opacity: 0; }
+}
+
+/* Info page */
+.info-open-wrap {
+  display: flex; flex-direction: column; align-items: center;
+  justify-content: center; gap: 14px;
+  padding: 60px 24px 24px;
+}
+.info-open-btn {
+  display: flex; align-items: center; gap: 12px;
+  background: linear-gradient(135deg, #FF0000 0%, #CC0000 100%);
+  color: white; text-decoration: none;
+  font-size: 16px; font-weight: 700;
+  padding: 18px 28px; border-radius: 16px;
+  box-shadow: 0 6px 20px rgba(200,0,0,.3);
+  transition: transform .18s, box-shadow .18s;
+}
+.info-open-btn:hover  { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(200,0,0,.4); }
+.info-open-btn:active { transform: translateY(0) scale(.97); }
+.info-open-hint {
+  font-size: 12px; color: var(--c-text-soft);
+}
+
 /* ── External App Links ──────────────────────────────────── */
 .ext-links {
   display: flex; gap: var(--sp-xs);

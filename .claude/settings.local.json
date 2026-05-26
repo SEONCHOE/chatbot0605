@@ -3,7 +3,10 @@
     "allow": [
       "WebFetch(domain:momsguide.co.kr)",
       "WebSearch",
-      "WebFetch(domain:momguide.co.kr)"
+      "WebFetch(domain:momguide.co.kr)",
+      "WebFetch(domain:api.anthropic.com)",
+      "Bash(node *)",
+      "Bash(npm run *)"
     ]
   }
 }
