@@ -501,6 +501,25 @@
   </div><!-- /#app -->
 
   <script src="app.js"></script>
+  <!-- Voice overlay -->
+  <div id="voice-overlay" class="voice-overlay" style="display:none" aria-modal="true">
+    <div class="voice-sheet">
+      <div class="voice-header">
+        <div class="voice-icon" id="voice-icon">🎤</div>
+        <div class="voice-status" id="voice-status">듣는 중...</div>
+      </div>
+      <div class="voice-wave" id="voice-wave">
+        <div class="voice-bar"></div>
+        <div class="voice-bar"></div>
+        <div class="voice-bar"></div>
+        <div class="voice-bar"></div>
+        <div class="voice-bar"></div>
+      </div>
+      <div class="voice-transcript" id="voice-transcript"></div>
+      <button class="voice-cancel" id="voice-cancel">취소</button>
+    </div>
+  </div>
+
   <!-- Share Sheet -->
   <div id="share-overlay" class="share-overlay" style="display:none" aria-modal="true">
     <div class="share-sheet">

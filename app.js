@@ -927,6 +927,440 @@ function openHealthModal(type) {
   openModal('health-log-modal');
 }
 
+// ── VOICE STT + INTENT ROUTER ────────────────────────────────
+let voiceRecognition = null;
+let voiceActive      = false;
+
+const VOICE_TOOLS = [
+  {
+    type: 'function',
+    function: {
+      name: 'record_activity',
+      description: '아기의 활동(수유, 수면, 기저귀, 산책, 울음)을 시간표에 기록합니다.',
+      parameters: {
+        type: 'object',
+        properties: {
+          type: {
+            type: 'string',
+            enum: ['feed', 'sleep', 'pee', 'poop', 'cry', 'walk'],
+            description: 'feed=수유, sleep=수면, pee=소변, poop=대변, cry=울음, walk=산책'
+          },
+          time:     { type: 'string', description: '시작 시간 HH:MM (24시간). 언급 없으면 생략' },
+          endTime:  { type: 'string', description: '종료 시간 HH:MM. sleep/cry/walk에만 해당' },
+          amount:   { type: 'number', description: '수유량(ml). 수유일 때만' },
+          feedType: { type: 'string', enum: ['분유', '모유', '혼합'], description: '수유 방법' },
+          note:     { type: 'string', description: '메모나 특이사항' }
+        },
+        required: ['type']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'save_schedule',
+      description: '할일이나 예약 일정(예방접종, 병원, 이유식 재료, 쇼핑 등)을 스케줄에 저장합니다.',
+      parameters: {
+        type: 'object',
+        properties: {
+          text:     { type: 'string', description: '할일 내용 (간결하게)' },
+          category: {
+            type: 'string',
+            enum: ['health', 'food', 'play', 'etc'],
+            description: 'health=건강/병원/접종, food=이유식/음식, play=놀이/발달, etc=기타'
+          }
+        },
+        required: ['text', 'category']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'chat_response',
+      description: '아기 육아 정보 질문, 조언 요청, 일반 대화에 답변합니다.',
+      parameters: {
+        type: 'object',
+        properties: {
+          message: { type: 'string', description: '사용자의 원본 메시지' }
+        },
+        required: ['message']
+      }
+    }
+  }
+];
+
+function initVoice() {
+  const btn = document.getElementById('nav-fab-mic');
+  if (!btn) return;
+  btn.addEventListener('click', () => voiceActive ? stopVoice() : startVoice());
+
+  document.getElementById('voice-cancel')?.addEventListener('click', () => stopVoice());
+  document.getElementById('voice-overlay')?.addEventListener('click', (e) => {
+    if (e.target.id === 'voice-overlay') stopVoice();
+  });
+}
+
+function setVoiceUI(state, transcript) {
+  const overlay   = document.getElementById('voice-overlay');
+  const statusEl  = document.getElementById('voice-status');
+  const iconEl    = document.getElementById('voice-icon');
+  const transcEl  = document.getElementById('voice-transcript');
+  const micBtn    = document.getElementById('nav-fab-mic');
+  const overlayEl = document.getElementById('voice-overlay');
+
+  if (state === 'hidden') {
+    overlay.style.display = 'none';
+    transcEl.textContent  = '';
+    micBtn.classList.remove('listening', 'processing');
+    overlayEl.classList.remove('processing');
+    return;
+  }
+
+  overlay.style.display = 'flex';
+  if (transcript !== undefined) transcEl.textContent = transcript;
+
+  if (state === 'listening') {
+    iconEl.textContent    = '🎤';
+    statusEl.textContent  = '듣는 중...';
+    micBtn.classList.add('listening');
+    micBtn.classList.remove('processing');
+    overlayEl.classList.remove('processing');
+  } else if (state === 'processing') {
+    iconEl.textContent    = '🧠';
+    statusEl.textContent  = '분석 중...';
+    micBtn.classList.remove('listening');
+    micBtn.classList.add('processing');
+    overlayEl.classList.add('processing');
+  }
+}
+
+function startVoice() {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) {
+    showToast('⚠️ 음성인식은 Chrome에서 지원돼요');
+    return;
+  }
+
+  voiceActive = true;
+  setVoiceUI('listening');
+
+  const rec = new SR();
+  voiceRecognition = rec;
+  rec.lang = 'ko-KR';
+  rec.interimResults = true;
+  rec.maxAlternatives = 1;
+  rec.continuous = false;
+
+  rec.onresult = (e) => {
+    const interim = Array.from(e.results).map(r => r[0].transcript).join('');
+    setVoiceUI('listening', interim);
+
+    if (e.results[e.results.length - 1].isFinal) {
+      const final = interim;
+      stopVoice(false);
+      setVoiceUI('processing', `"${final}"`);
+      processVoiceInput(final);
+    }
+  };
+
+  rec.onerror = (e) => {
+    stopVoice();
+    const msg = e.error === 'not-allowed'
+      ? '마이크 권한을 허용해주세요'
+      : e.error === 'no-speech'
+      ? '음성이 감지되지 않았어요'
+      : e.error;
+    showToast('🎤 ' + msg);
+  };
+
+  rec.onend = () => { if (voiceActive) stopVoice(); };
+  rec.start();
+}
+
+function stopVoice(hideUI = true) {
+  voiceActive = false;
+  if (voiceRecognition) {
+    try { voiceRecognition.stop(); } catch (_) {}
+    voiceRecognition = null;
+  }
+  if (hideUI) setVoiceUI('hidden');
+}
+
+async function processVoiceInput(transcript) {
+  const oaKey = localStorage.getItem('openai_api_key') || '';
+
+  if (!oaKey) {
+    setVoiceUI('hidden');
+    navigate('chat');
+    setTimeout(() => sendChatMessage(transcript), 200);
+    showToast('💬 챗봇으로 전달했어요 (API 키 미설정)');
+    return;
+  }
+
+  try {
+    const babyMonths = STATE.baby ? (getAgeInfo(STATE.baby.birthDate)?.months ?? 5) : 5;
+    const babyName   = STATE.baby?.name || '아기';
+
+    const res = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${oaKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini',
+        messages: [
+          {
+            role: 'system',
+            content: `너는 아기 육아 앱의 음성 명령 분류기야.
+아기 이름: ${babyName}, 월령: ${babyMonths}개월, 현재 시각: ${nowHHMM()}.
+사용자 음성 입력을 보고 반드시 아래 중 하나의 함수를 호출해:
+- 수유/수면/기저귀/산책/울음 내용 → record_activity
+- 할일/예약/일정 저장 요청 → save_schedule
+- 질문/대화/정보 요청 → chat_response
+시간 표현("방금", "지금", "30분 전" 등)은 HH:MM으로 변환해서 넣어줘.`
+          },
+          { role: 'user', content: transcript }
+        ],
+        tools: VOICE_TOOLS,
+        tool_choice: 'required'
+      })
+    });
+
+    const data   = await res.json();
+    const tcall  = data.choices?.[0]?.message?.tool_calls?.[0];
+    if (!tcall) throw new Error('no tool_call');
+
+    const fn   = tcall.function.name;
+    const args = JSON.parse(tcall.function.arguments);
+
+    setVoiceUI('hidden');
+
+    if      (fn === 'record_activity') handleVoiceRecord(args);
+    else if (fn === 'save_schedule')   handleVoiceSchedule(args);
+    else                               handleVoiceChat(transcript);
+
+  } catch (err) {
+    console.error('Voice router error', err);
+    setVoiceUI('hidden');
+    navigate('chat');
+    setTimeout(() => sendChatMessage(transcript), 200);
+    showToast('💬 챗봇으로 연결했어요');
+  }
+}
+
+function handleVoiceRecord(args) {
+  const dateKey = todayStr();
+  const time    = args.time || nowHHMM();
+  const type    = args.type;
+
+  const log = { id: uid(), type, date: dateKey, note: args.note || '' };
+
+  if (type === 'sleep' || type === 'cry' || type === 'walk') {
+    log.startTime = time;
+    if (args.endTime) log.endTime = args.endTime;
+  } else {
+    log.time      = time;
+    log.startTime = time;
+  }
+  if (type === 'feed') {
+    log.amount   = args.amount ? parseInt(args.amount) : null;
+    log.feedType = args.feedType || '분유';
+  }
+
+  if (!STATE.logs[dateKey]) STATE.logs[dateKey] = [];
+  STATE.logs[dateKey].push(log);
+  STATE.logs[dateKey].sort((a, b) => (a.startTime || a.time || '').localeCompare(b.startTime || b.time || ''));
+  saveState();
+
+  const label = { feed:'수유', sleep:'수면', pee:'소변', poop:'대변', cry:'울음', walk:'산책' };
+  showToast(`🎤 ${TYPE_ICONS[type]} ${label[type]} 기록 완료!`);
+
+  navigate('timeline');
+  setTimeout(buildTimeline, 100);
+}
+
+function handleVoiceSchedule(args) {
+  addTodo(args.text, args.category);
+  showToast(`🎤 스케줄에 추가됐어요: ${args.text}`);
+  navigate('schedule');
+}
+
+function handleVoiceChat(transcript) {
+  navigate('chat');
+  setTimeout(() => {
+    initChat();
+    sendChatMessage(transcript);
+  }, 200);
+}
+
+// ── RAG 지식베이스 ────────────────────────────────────────────
+let RAG_CHUNKS  = null;   // [{id, text, metadata}]
+let RAG_FIGURES = null;   // [{id, title, caption, image, metadata}]
+
+async function loadRagData() {
+  if (RAG_CHUNKS) return;
+  try {
+    const [cr, fr] = await Promise.all([
+      fetch('data_for_RAG/processed/rag_chunks.json').then(r => r.json()),
+      fetch('data_for_RAG/processed/rag_figures.json').then(r => r.json()),
+    ]);
+    RAG_CHUNKS  = cr;
+    RAG_FIGURES = fr;
+  } catch (e) {
+    RAG_CHUNKS  = [];
+    RAG_FIGURES = [];
+    console.warn('RAG 데이터 로드 실패:', e);
+  }
+}
+
+// TF-IDF 간략 구현 (IDF 없이 TF + 키워드 가중치)
+function tokenize(text) {
+  return text
+    .toLowerCase()
+    .replace(/[^가-힣a-z0-9\s]/g, ' ')
+    .split(/\s+/)
+    .filter(t => t.length > 1);
+}
+
+function buildQueryTokens(query) {
+  const tokens = tokenize(query);
+  const freq   = {};
+  tokens.forEach(t => { freq[t] = (freq[t] || 0) + 1; });
+  return freq;
+}
+
+function cosineSim(queryFreq, docText) {
+  const docTokens = tokenize(docText);
+  const docFreq   = {};
+  docTokens.forEach(t => { docFreq[t] = (docFreq[t] || 0) + 1; });
+
+  let dot = 0, qNorm = 0, dNorm = 0;
+  for (const [t, qf] of Object.entries(queryFreq)) {
+    dot   += qf * (docFreq[t] || 0);
+    qNorm += qf * qf;
+  }
+  for (const df of Object.values(docFreq)) dNorm += df * df;
+  if (!qNorm || !dNorm) return 0;
+  return dot / (Math.sqrt(qNorm) * Math.sqrt(dNorm));
+}
+
+function searchChunks(query, topK = 5) {
+  if (!RAG_CHUNKS?.length) return [];
+  const qFreq = buildQueryTokens(query);
+  return RAG_CHUNKS
+    .map(c => ({ ...c, score: cosineSim(qFreq, c.text) }))
+    .filter(c => c.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, topK);
+}
+
+function searchFigures(query, topK = 3) {
+  if (!RAG_FIGURES?.length) return [];
+  const qFreq = buildQueryTokens(query);
+  return RAG_FIGURES
+    .map(f => ({ ...f, score: cosineSim(qFreq, f.title + ' ' + f.caption) }))
+    .filter(f => f.score > 0.05)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, topK);
+}
+
+// 출처 렌더링 (답변 하단에 붙임)
+function renderSources(chunks, figures) {
+  const refs = [];
+
+  // 청크 출처 (중복 제거)
+  const seen = new Set();
+  for (const c of chunks) {
+    const key = `${c.metadata.source}|${c.metadata.page}`;
+    if (!seen.has(key)) {
+      seen.add(key);
+      const page = c.metadata.page ? ` p.${c.metadata.page}` : '';
+      refs.push(`<span class="rag-ref">📖 ${c.metadata.source}${page}</span>`);
+    }
+  }
+
+  // 표/그림
+  const figHtml = figures.map(f => {
+    const page = f.metadata.page ? ` (p.${f.metadata.page})` : '';
+    const img  = f.image
+      ? `<img src="data_for_RAG/processed/figures/${f.image}" class="rag-fig-img" alt="${f.title}" loading="lazy">`
+      : '';
+    return `<div class="rag-figure">
+      ${img}
+      <div class="rag-fig-title">${f.title}${page}</div>
+      <div class="rag-fig-source">출처: ${f.metadata.source}</div>
+    </div>`;
+  }).join('');
+
+  if (!refs.length && !figHtml) return '';
+  return `<div class="rag-sources">
+    <div class="rag-refs">${refs.join('')}</div>
+    ${figHtml ? `<div class="rag-figures">${figHtml}</div>` : ''}
+  </div>`;
+}
+
+// RAG Chat Agent: 검색 → GPT 답변 생성 → 출처 렌더링
+async function ragChatAgent(userQuery) {
+  await loadRagData();
+
+  const oaKey = localStorage.getItem('openai_api_key') || '';
+  const chunks  = searchChunks(userQuery, 5);
+  const figures = searchFigures(userQuery, 3);
+
+  const babyMonths = STATE.baby ? (getAgeInfo(STATE.baby.birthDate)?.months ?? null) : null;
+  const babyName   = STATE.baby?.name || '아기';
+
+  // 컨텍스트 구성
+  const context = chunks.length
+    ? chunks.map(c => {
+        const src  = c.metadata.source;
+        const page = c.metadata.page ? ` (p.${c.metadata.page})` : '';
+        return `[출처: ${src}${page}]\n${c.text}`;
+      }).join('\n\n---\n\n')
+    : '';
+
+  // GPT API 없으면 rule-based로 폴백
+  if (!oaKey) {
+    const fallback = getBotResponse(userQuery);
+    return fallback + renderSources(chunks, figures);
+  }
+
+  try {
+    const systemPrompt = `너는 영유아 육아 전문 챗봇이야.
+아기 이름: ${babyName}, 월령: ${babyMonths != null ? babyMonths + '개월' : '미입력'}.
+아래 참고 문서를 바탕으로 질문에 정확하고 실용적인 답변을 해줘.
+- 항상 한국어로 답변
+- 중요 키워드는 <strong>볼드</strong> 처리
+- 목록은 <ul><li> 형식
+- 의학적 결정은 반드시 소아청소년과 전문의 상담 권고 포함
+- 없는 정보를 지어내지 마
+
+[참고 문서]
+${context || '관련 문서 없음. 일반 육아 지식으로 답변.'}`;
+
+    const res = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${oaKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model:       'gpt-4o-mini',
+        max_tokens:  800,
+        temperature: 0.3,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user',   content: userQuery },
+        ],
+      }),
+    });
+
+    const data    = await res.json();
+    const answer  = data.choices?.[0]?.message?.content || '답변을 생성하지 못했어요.';
+    return answer + renderSources(chunks, figures);
+
+  } catch (err) {
+    console.error('RAG chat error:', err);
+    return getBotResponse(userQuery) + renderSources(chunks, figures);
+  }
+}
+
 // ── CHATBOT ───────────────────────────────────────────────────
 let botReady = false;
 
@@ -979,11 +1413,10 @@ function sendChatMessage(text) {
   document.getElementById('chat-input').value = '';
   addUserMessage(text);
   showTyping();
-  setTimeout(() => {
+  ragChatAgent(text).then(response => {
     removeTyping();
-    const response = getBotResponse(text);
     addBotMessage(response);
-  }, 800 + Math.random() * 400);
+  });
 }
 
 function getBotResponse(text) {
@@ -1481,11 +1914,6 @@ function attachEvents() {
   // Bottom nav (data-page 있는 버튼만 — <a> 태그 제외)
   document.querySelectorAll('.nav-item[data-page]').forEach(btn => {
     btn.addEventListener('click', () => navigate(btn.dataset.page));
-  });
-
-  // Center FAB: mic (STT — UI only for now)
-  document.getElementById('nav-fab-mic')?.addEventListener('click', () => {
-    showToast('🎤 음성 기록 기능은 준비중이에요!');
   });
 
   // Quick add buttons (home)
@@ -2304,6 +2732,7 @@ function init() {
   initMilestoneCalendar();
   initReportEvents();
   initKeywordPicker();
+  initVoice();
 
   // Refresh header every minute
   setInterval(updateHeader, 60000);
