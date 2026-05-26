@@ -27,9 +27,10 @@ function defaultState() {
     logs: {},             // { 'YYYY-MM-DD': [ logObj, … ] }
     todos: [],            // [ { id, text, category, completed, createdAt } ]
     health: {
-      logs: [],           // [ { id, type, detail, temp, date, time } ]
+      logs: [],           // [ { id, type, detail, temp, date, time, photo? } ]
       medications: []     // [ { id, name, dose, freq, note, date } ]
     },
+    growth: [],           // [ { id, date, height?, weight? } ]
     development: {}       // { 'milestone-id': true }
   };
 }
@@ -160,7 +161,7 @@ function navigate(page) {
   // Render page content
   if (page === 'home')      renderHome();
   if (page === 'timeline')  renderTimeline();
-  if (page === 'schedule')  renderTodos();
+  if (page === 'schedule')  { renderTodos(); renderScheduleShopLinks(); }
   if (page === 'health')    renderHealth();
 }
 
@@ -673,13 +674,15 @@ function renderHealth() {
   if (currentHTab === 'development') renderDevelopment();
   else if (currentHTab === 'logs')   renderHealthLogs();
   else if (currentHTab === 'medication') renderMedication();
+  else if (currentHTab === 'report') renderReport();
 }
 
 function switchHTab(tab) {
   currentHTab = tab;
   document.querySelectorAll('.h-tab').forEach(t => t.classList.toggle('active', t.dataset.htab === tab));
   document.querySelectorAll('.h-section').forEach(s => s.classList.remove('active'));
-  document.getElementById(`${tab === 'development' ? 'dev' : tab}-tab`).classList.add('active');
+  const tabId = tab === 'development' ? 'dev-tab' : `${tab}-tab`;
+  document.getElementById(tabId).classList.add('active');
   renderHealth();
 }
 
@@ -697,8 +700,7 @@ function renderDevelopment() {
 
   banner.innerHTML = `
     <h3>현재 ${ai.months}개월 (${ai.weeks}주)</h3>
-    <p>${STATE.baby.name}${koreanParticle(STATE.baby.name, '이의', '의')} 발달 체크리스트예요</p>
-    ${makeExternalLinks(ai.months + '개월 아기 발달 장난감')}`;
+    <p>${STATE.baby.name}${koreanParticle(STATE.baby.name, '이의', '의')} 발달 체크리스트예요</p>`;
 
   const milestones = getMilestones(ai.months);
   let html = '';
@@ -877,15 +879,19 @@ function openHealthModal(type) {
         <div class="form-group"><label>날짜</label><input type="date" id="hf-date" value="${today}"></div>
         <div class="form-group"><label>시간</label><input type="time" id="hf-time" value="${now}"></div>
       </div>
+      <div class="form-group"><label>사진 (선택)</label><input type="file" id="hf-photo" accept="image/*" capture="environment" style="font-size:12px"></div>
       <button class="btn-primary btn-full" id="hf-save">저장</button>`;
-    document.getElementById('hf-save').addEventListener('click', () => {
+    document.getElementById('hf-save').addEventListener('click', async () => {
       const detail = document.getElementById('hf-detail').value.trim();
       if (!detail) { showToast('내용을 입력해주세요'); return; }
+      const photoFile = document.getElementById('hf-photo').files[0];
+      let photo = null;
+      if (photoFile) photo = await compressImage(photoFile, 400, 300);
       if (!STATE.health.logs) STATE.health.logs = [];
       STATE.health.logs.push({
         id: uid(), type: document.getElementById('hf-type').value,
         detail, date: document.getElementById('hf-date').value,
-        time: document.getElementById('hf-time').value
+        time: document.getElementById('hf-time').value, photo
       });
       saveState(); closeModal('health-log-modal');
       showToast('🌡️ 건강 기록이 저장됐어요!');
@@ -1312,6 +1318,87 @@ function makeExternalLinks(query) {
     '</div>';
 }
 
+const SHOP_KEYWORDS = {
+  newborn: ['황달 케어', '신생아 목욕', '배앓이 달래기', '수유 자세', '태열', '영아산통', '모유수유', '신생아 모빌'],
+  '1-3':   ['흑백 모빌', '딸랑이', '배앓이', '목 가누기', '사회적 미소', '소프트 토이', '스와들링', '배 놀이'],
+  '4-6':   ['이앓이', '치발기', '촉감 놀이', '이유식 준비', '뒤집기 연습', '배 놀이 매트', '오감 장난감', '목욕 장난감'],
+  '7-9':   ['이유식', '집게 잡기', '기기 연습', '낯가림', '소리 장난감', '손잡이 컵', '범퍼 침대', '오뚝이'],
+  '10-12': ['걸음마 보조', '첫 단어', '컵 연습', '소프트 퍼즐', '잡고 서기', '끌차', '잇몸 간식'],
+  toddler: ['역할 놀이', '끌차', '큰 블록', '유아 크레용', '어린이집 가방', '유아 의자', '놀이 매트'],
+};
+
+function getShopKeywordsForAge(months) {
+  if (months < 1)  return SHOP_KEYWORDS.newborn;
+  if (months <= 3) return SHOP_KEYWORDS['1-3'];
+  if (months <= 6) return SHOP_KEYWORDS['4-6'];
+  if (months <= 9) return SHOP_KEYWORDS['7-9'];
+  if (months <= 12)return SHOP_KEYWORDS['10-12'];
+  return SHOP_KEYWORDS.toddler;
+}
+
+function renderScheduleShopLinks() {
+  const kwEl  = document.getElementById('shop-keywords');
+  const grid  = document.getElementById('shop-grid');
+  const badge = document.getElementById('shop-age-badge');
+  if (!kwEl || !grid) return;
+
+  const ai = STATE.baby ? getAgeInfo(STATE.baby.birthDate) : null;
+  const months = ai ? ai.months : null;
+
+  if (badge) badge.textContent = months !== null ? `${months}개월 맞춤` : '';
+
+  // Keyword chips
+  const keywords = months !== null ? getShopKeywordsForAge(months) : SHOP_KEYWORDS['4-6'];
+  kwEl.innerHTML = `<div class="kw-chips">${keywords.map(k =>
+    `<button class="kw-chip" data-kw="${k}">${k}</button>`
+  ).join('')}</div>`;
+
+  // Platform quick-links (3개, age-based default query)
+  const baseQ = months !== null ? `${months}개월 아기 ` : '아기 ';
+  const ytUrl = 'https://www.youtube.com/results?search_query=' + encodeURIComponent(baseQ + '육아 정보');
+  const dgUrl = 'https://www.daangn.com/search/' + encodeURIComponent(baseQ + '장난감');
+  const mgUrl = 'https://momguide.co.kr/search/?q=' + encodeURIComponent('아기');
+
+  grid.innerHTML = `
+    <a class="shop-item" href="${ytUrl}" target="_blank" rel="noopener noreferrer">
+      <div class="shop-item-icon shop-yt">🎬</div>
+      <div class="shop-item-info"><div class="shop-item-name">YouTube</div><div class="shop-item-desc">키워드로 육아 영상 검색</div></div>
+      <svg class="shop-arrow" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M10 6l6 6-6 6"/></svg>
+    </a>
+    <a class="shop-item" href="${dgUrl}" target="_blank" rel="noopener noreferrer">
+      <div class="shop-item-icon shop-dg">🥕</div>
+      <div class="shop-item-info"><div class="shop-item-name">당근마켓</div><div class="shop-item-desc">중고 장난감·아이템 검색</div></div>
+      <svg class="shop-arrow" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M10 6l6 6-6 6"/></svg>
+    </a>
+    <a class="shop-item" href="${mgUrl}" target="_blank" rel="noopener noreferrer">
+      <div class="shop-item-icon shop-mg">🧴</div>
+      <div class="shop-item-info"><div class="shop-item-name">맘가이드</div><div class="shop-item-desc">성분 안전성 확인</div></div>
+      <svg class="shop-arrow" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M10 6l6 6-6 6"/></svg>
+    </a>`;
+}
+
+function initKeywordPicker() {
+  const overlay = document.getElementById('kw-picker-overlay');
+  if (!overlay) return;
+
+  document.getElementById('shop-keywords')?.addEventListener('click', e => {
+    const chip = e.target.closest('.kw-chip');
+    if (!chip) return;
+    const kw = chip.dataset.kw;
+    document.getElementById('kw-picker-label').textContent = `"${kw}" 검색하기`;
+    document.getElementById('kw-yt').href = 'https://www.youtube.com/results?search_query=' + encodeURIComponent(kw + ' 아기');
+    document.getElementById('kw-dg').href = 'https://www.daangn.com/search/' + encodeURIComponent(kw);
+    document.getElementById('kw-mg').href = 'https://momguide.co.kr/search/?q=' + encodeURIComponent(kw);
+    overlay.style.display = 'flex';
+  });
+
+  document.getElementById('kw-picker-cancel')?.addEventListener('click', () => { overlay.style.display = 'none'; });
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.style.display = 'none'; });
+  overlay.querySelectorAll('.kw-picker-btn').forEach(a => {
+    a.addEventListener('click', () => { setTimeout(() => { overlay.style.display = 'none'; }, 200); });
+  });
+}
+
 function getToySuggestions(months) {
   if (months === null) return '<ul><li>월령에 맞는 장난감을 추천해드려요</li></ul>';
   if (months < 3)  return '<ul><li>🎠 흑백 모빌 (시각 발달)</li><li>🔔 딸랑이 (청각 발달)</li><li>🧸 소프트 토이</li></ul>';
@@ -1562,6 +1649,503 @@ function maybeAddSampleTodos() {
   saveState();
 }
 
+// ── REPORT ────────────────────────────────────────────────────
+
+function compressImage(file, maxW, maxH) {
+  return new Promise(resolve => {
+    const reader = new FileReader();
+    reader.onload = e => {
+      const img = new Image();
+      img.onload = () => {
+        let w = img.width, h = img.height;
+        const ratio = Math.min(maxW / w, maxH / h, 1);
+        w = Math.round(w * ratio); h = Math.round(h * ratio);
+        const canvas = document.createElement('canvas');
+        canvas.width = w; canvas.height = h;
+        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+        resolve(canvas.toDataURL('image/jpeg', 0.72));
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+// WHO Growth Standards P3 / P50 / P97 (0–24 months)
+const GROWTH_DATA = {
+  boy: {
+    height: {
+      P3:  [46.1,50.2,53.2,55.3,57.0,58.4,59.7,60.9,62.1,63.3,64.5,65.6,66.7,67.7,68.7,69.7,70.6,71.5,72.4,73.3,74.2,75.1,75.9,76.8,77.7],
+      P50: [49.9,54.7,58.4,61.4,63.9,65.9,67.6,69.2,70.6,72.0,73.3,74.5,75.7,76.9,78.0,79.1,80.2,81.2,82.3,83.2,84.2,85.1,86.0,86.9,87.8],
+      P97: [53.4,59.0,63.2,66.8,69.4,71.9,74.0,75.9,77.7,79.3,80.9,82.4,83.8,85.1,86.4,87.7,88.9,90.1,91.3,92.5,93.7,94.9,96.0,97.2,98.3],
+    },
+    weight: {
+      P3:  [2.5,3.4,4.4,5.1,5.6,6.1,6.4,6.7,7.0,7.2,7.4,7.6,7.8,8.0,8.2,8.4,8.6,8.7,8.9,9.1,9.2,9.4,9.5,9.7,9.8],
+      P50: [3.3,4.5,5.6,6.4,7.0,7.5,7.9,8.3,8.6,8.9,9.2,9.4,9.6,9.9,10.1,10.3,10.5,10.7,10.9,11.1,11.3,11.5,11.8,12.0,12.2],
+      P97: [4.4,5.8,7.1,8.0,8.7,9.3,9.8,10.3,10.7,11.0,11.4,11.7,12.0,12.3,12.6,12.9,13.2,13.5,13.8,14.1,14.4,14.7,15.0,15.3,15.6],
+    }
+  },
+  girl: {
+    height: {
+      P3:  [45.6,49.2,52.1,54.2,55.9,57.4,58.7,59.9,61.0,62.2,63.3,64.4,65.4,66.4,67.4,68.3,69.3,70.2,71.1,72.0,72.8,73.7,74.5,75.4,76.2],
+      P50: [49.1,53.7,57.1,59.8,62.1,64.0,65.7,67.3,68.7,70.1,71.5,72.8,74.0,75.2,76.4,77.5,78.6,79.7,80.7,81.7,82.7,83.7,84.6,85.5,86.4],
+      P97: [52.9,58.1,62.1,65.2,67.8,70.0,71.9,73.7,75.3,76.9,78.4,79.9,81.3,82.7,84.0,85.3,86.6,87.9,89.1,90.3,91.5,92.6,93.7,94.8,95.9],
+    },
+    weight: {
+      P3:  [2.4,3.2,4.0,4.7,5.1,5.5,5.8,6.1,6.3,6.5,6.7,6.9,7.1,7.2,7.4,7.6,7.8,7.9,8.1,8.2,8.4,8.6,8.7,8.9,9.0],
+      P50: [3.2,4.2,5.1,5.8,6.4,6.9,7.3,7.6,7.9,8.2,8.5,8.7,9.0,9.2,9.4,9.6,9.8,10.0,10.2,10.4,10.6,10.9,11.1,11.3,11.5],
+      P97: [4.2,5.5,6.6,7.5,8.2,8.8,9.3,9.8,10.2,10.5,10.9,11.2,11.5,11.8,12.1,12.4,12.7,13.0,13.2,13.5,13.8,14.0,14.3,14.6,14.8],
+    }
+  }
+};
+
+let reportMode  = 'week';
+let growthMetric = 'height';
+
+function calcPercentile(value, ageMonths, metric, gender) {
+  const gk = gender === 'girl' ? 'girl' : 'boy';
+  const d = GROWTH_DATA[gk][metric];
+  const m = Math.max(0, Math.min(24, Math.round(ageMonths)));
+  const p3 = d.P3[m], p50 = d.P50[m], p97 = d.P97[m];
+  let pct;
+  if (value <= p3)       pct = 3;
+  else if (value >= p97) pct = 97;
+  else if (value <= p50) pct = Math.round(3  + (value - p3)  / (p50 - p3)  * 47);
+  else                   pct = Math.round(50 + (value - p50) / (p97 - p50) * 47);
+  const emoji = pct <= 15 ? '⬇️' : pct >= 85 ? '⬆️' : '✅';
+  const label = pct <= 15 ? `하위 ${pct}%` : pct >= 85 ? `상위 ${100 - pct}%` : `중간 범위 (${pct}번째 백분위)`;
+  return { pct, emoji, label };
+}
+
+function getActivityData(days) {
+  const result = [];
+  for (let i = days - 1; i >= 0; i--) {
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    const key = localDateStr(d);
+    const logs = STATE.logs[key] || [];
+    const sleepMin = logs.filter(l => l.type === 'sleep' && l.endTime).reduce((sum, l) => {
+      const [sh, sm] = (l.startTime || '00:00').split(':').map(Number);
+      const [eh, em] = (l.endTime   || '00:00').split(':').map(Number);
+      let dur = (eh * 60 + em) - (sh * 60 + sm);
+      if (dur < 0) dur += 1440;
+      return sum + dur;
+    }, 0);
+    result.push({
+      label: ['일','월','화','수','목','금','토'][d.getDay()],
+      sleepMin,
+      feedCount:   logs.filter(l => l.type === 'feed').length,
+      diaperCount: logs.filter(l => l.type === 'pee' || l.type === 'poop').length,
+    });
+  }
+  return result;
+}
+
+function buildDonutSVG(segments) {
+  const total = segments.reduce((s, d) => s + d.value, 0);
+  if (total === 0) return '';
+  const r = 37, cx = 54, cy = 54, circ = 2 * Math.PI * r;
+  let cum = 0;
+  const circles = segments.map(seg => {
+    const pct = seg.value / total;
+    const dash = pct * circ, gap = circ - dash;
+    const rot = (cum / total) * 360 - 90;
+    cum += seg.value;
+    return `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${seg.color}" stroke-width="15" stroke-dasharray="${dash.toFixed(2)} ${gap.toFixed(2)}" transform="rotate(${rot.toFixed(1)} ${cx} ${cy})" stroke-linecap="butt"/>`;
+  }).join('');
+  const legendRows = segments.map(seg => {
+    const pct = Math.round(seg.value / total * 100);
+    if (pct === 0) return '';
+    return `<div class="donut-leg"><span class="donut-dot" style="background:${seg.color}"></span>${seg.label}<b>${pct}%</b></div>`;
+  }).join('');
+  return `<div class="donut-wrap">
+    <svg viewBox="0 0 108 108" style="width:108px;height:108px;flex-shrink:0">
+      <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="#EEEAE6" stroke-width="15"/>
+      ${circles}
+    </svg>
+    <div class="donut-legend">${legendRows}</div>
+  </div>`;
+}
+
+function buildHeatmap(days) {
+  const colorMap = { sleep: '#4FAACC', feed: '#FF8040', pee: '#E6BC00', poop: '#B97A40', cry: '#E05577', walk: '#78C96E' };
+  const rows = [];
+  for (let i = days - 1; i >= 0; i--) {
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    const key = localDateStr(d);
+    const logs = STATE.logs[key] || [];
+    const hourMap = {};
+    logs.filter(l => l.type === 'sleep' && l.startTime && l.endTime).forEach(l => {
+      let sh = parseInt(l.startTime), eh = parseInt(l.endTime);
+      if (isNaN(sh) || isNaN(eh)) return;
+      if (sh <= eh) { for (let h = sh; h <= eh; h++) hourMap[h] = 'sleep'; }
+      else { for (let h = sh; h < 24; h++) hourMap[h] = 'sleep'; for (let h = 0; h <= eh; h++) hourMap[h] = 'sleep'; }
+    });
+    logs.filter(l => l.type !== 'sleep').forEach(l => {
+      const t = (l.startTime || l.time || '').split(':')[0];
+      const h = parseInt(t);
+      if (!isNaN(h) && hourMap[h] === undefined) hourMap[h] = l.type;
+    });
+    const dow = ['일','월','화','수','목','금','토'][d.getDay()];
+    const cells = Array.from({ length: 24 }, (_, h) => {
+      const type = hourMap[h];
+      const bg = type ? (colorMap[type] || '#78C96E') : '';
+      return `<div class="heat-cell" ${bg ? `style="background:${bg}"` : ''}></div>`;
+    }).join('');
+    rows.push(`<div class="heat-row"><span class="heat-day">${dow}</span><div class="heat-cells">${cells}</div></div>`);
+  }
+  return `<div class="heatmap-wrap">
+    <div class="heatmap-section-title">24시간 패턴</div>
+    <div class="heat-axis"><span>0시</span><span>6시</span><span>12시</span><span>18시</span><span>23시</span></div>
+    ${rows.join('')}
+  </div>`;
+}
+
+function renderActivityChart(mode) {
+  const container = document.getElementById('activity-chart');
+  const legendEl  = document.getElementById('activity-legend');
+  if (!container) return;
+
+  const days = mode === 'week' ? 7 : 30;
+  const raw = getActivityData(days);
+
+  let summary;
+  if (mode === 'week') {
+    summary = raw;
+  } else {
+    const avg = v => parseFloat((raw.reduce((s, d) => s + d[v], 0) / days).toFixed(1));
+    summary = [{ label: '평균', sleepMin: avg('sleepMin'), feedCount: avg('feedCount'), diaperCount: avg('diaperCount') }];
+  }
+
+  // Donut data (proportion by estimated duration)
+  const totalSleep  = raw.reduce((s, d) => s + d.sleepMin, 0);
+  const totalFeed   = raw.reduce((s, d) => s + d.feedCount, 0) * 30;   // ~30min each
+  const totalDiaper = raw.reduce((s, d) => s + d.diaperCount, 0) * 10; // ~10min each
+  const totalAwake  = Math.max(0, days * 1440 - totalSleep - totalFeed - totalDiaper);
+
+  const donutHTML = buildDonutSVG([
+    { label: '수면', value: totalSleep,  color: 'var(--c-sleep)' },
+    { label: '수유', value: totalFeed,   color: 'var(--c-feed)'  },
+    { label: '기저귀', value: totalDiaper, color: 'var(--c-pee)' },
+    { label: '기타', value: totalAwake,  color: '#E8E0D8'         },
+  ]);
+
+  const heatHTML = mode === 'week' ? buildHeatmap(7) : '';
+
+  // Legend
+  legendEl.innerHTML = [
+    ['act-sleep-dot', '수면'],
+    ['act-feed-dot',  '수유·식사'],
+    ['act-diaper-dot','기저귀'],
+  ].map(([cls, txt]) => `<div class="act-legend-item"><div class="act-legend-dot ${cls}"></div>${txt}</div>`).join('');
+
+  const maxSleep  = Math.max(...summary.map(d => d.sleepMin), 60);
+  const maxFeed   = Math.max(...summary.map(d => d.feedCount), 1);
+  const maxDiaper = Math.max(...summary.map(d => d.diaperCount), 1);
+
+  const barHTML = summary.map(d => {
+    const sw = Math.round((d.sleepMin    / maxSleep)  * 55);
+    const fw = Math.round((d.feedCount   / maxFeed)   * 25);
+    const dw = Math.round((d.diaperCount / maxDiaper) * 20);
+    const sleepH = `${Math.floor(d.sleepMin / 60)}h${d.sleepMin % 60 > 0 ? (d.sleepMin % 60) + 'm' : ''}`;
+    const tip = `${sleepH} · 수유 ${d.feedCount}회 · 기저귀 ${d.diaperCount}회`;
+    return `<div class="act-row">
+      <div class="act-day">${d.label}</div>
+      <div class="act-bar-track" title="${tip}">
+        <div class="act-bar-seg act-sleep-seg"  style="width:${sw}%"></div>
+        <div class="act-bar-seg act-feed-seg"   style="width:${fw}%"></div>
+        <div class="act-bar-seg act-diaper-seg" style="width:${dw}%"></div>
+      </div>
+      <div class="act-label">${tip}</div>
+    </div>`;
+  }).join('');
+
+  container.innerHTML = donutHTML + heatHTML +
+    `<div class="heatmap-section-title" style="margin-top:14px">일별 기록</div>` + barHTML;
+}
+
+function renderGrowthSVG(metric) {
+  const svgEl = document.getElementById('growth-svg');
+  const badgeEl = document.getElementById('growth-percentile-badge');
+  const recListEl = document.getElementById('growth-records');
+  if (!svgEl) return;
+
+  const gender = STATE.baby?.gender === 'girl' ? 'girl' : 'boy';
+  const gd = GROWTH_DATA[gender][metric];
+  const months = Array.from({ length: 25 }, (_, i) => i);
+
+  // Chart coordinate helpers
+  const L = 38, T = 14, R = 12, B = 22;
+  const W = 300, H = 180;
+  const cW = W - L - R, cH = H - T - B;
+
+  const yRange = metric === 'height' ? { min: 43, max: 101 } : { min: 2, max: 16 };
+  const xS = m => L + (m / 24) * cW;
+  const yS = v => T + cH - ((v - yRange.min) / (yRange.max - yRange.min)) * cH;
+
+  const polyline = (arr, color, dash, sw = 1.5) => {
+    const pts = months.map(m => `${xS(m).toFixed(1)},${yS(arr[m]).toFixed(1)}`).join(' ');
+    return `<polyline points="${pts}" fill="none" stroke="${color}" stroke-width="${sw}" stroke-dasharray="${dash}" stroke-linecap="round" stroke-linejoin="round"/>`;
+  };
+
+  // Shade P3–P97 band
+  const bandPts = [
+    ...months.map(m => `${xS(m).toFixed(1)},${yS(gd.P97[m]).toFixed(1)}`),
+    ...months.slice().reverse().map(m => `${xS(m).toFixed(1)},${yS(gd.P3[m]).toFixed(1)}`),
+  ].join(' ');
+
+  // Axis labels
+  const xLabels = [0, 6, 12, 18, 24].map(m =>
+    `<text x="${xS(m).toFixed(1)}" y="${(T + cH + 14).toFixed(1)}" text-anchor="middle" font-size="8" fill="#aaa">${m}m</text>`
+  ).join('');
+  const yTicks = metric === 'height'
+    ? [50, 60, 70, 80, 90, 100]
+    : [4, 6, 8, 10, 12, 14];
+  const yLabels = yTicks.map(v =>
+    `<line x1="${L}" y1="${yS(v).toFixed(1)}" x2="${(L + cW).toFixed(1)}" y2="${yS(v).toFixed(1)}" stroke="#f0f0f0" stroke-width="1"/>
+     <text x="${(L - 3).toFixed(1)}" y="${(yS(v) + 3).toFixed(1)}" text-anchor="end" font-size="7.5" fill="#bbb">${v}</text>`
+  ).join('');
+
+  // Baby's recorded points
+  const records = (STATE.growth || []).filter(r => r[metric]).sort((a, b) => a.date.localeCompare(b.date));
+  let dotsSvg = '';
+  let lineSvg = '';
+  let latestPct = null;
+
+  if (records.length > 0 && STATE.baby?.birthDate) {
+    const birthMs = parseDate(STATE.baby.birthDate).getTime();
+    const pts = records.map(r => {
+      const ageMs = parseDate(r.date).getTime() - birthMs;
+      const ageM  = Math.max(0, ageMs / (1000 * 60 * 60 * 24 * 30.44));
+      const x = xS(Math.min(ageM, 24));
+      const y = yS(Math.max(yRange.min, Math.min(yRange.max, r[metric])));
+      return { x, y, ageM, val: r[metric] };
+    });
+    if (pts.length > 1) {
+      lineSvg = `<polyline points="${pts.map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ')}" fill="none" stroke="#FF8040" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" opacity="0.7"/>`;
+    }
+    dotsSvg = pts.map(p =>
+      `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="4" fill="#FF8040" stroke="white" stroke-width="1.5"/>`
+    ).join('');
+    const last = pts[pts.length - 1];
+    latestPct = calcPercentile(last.val, last.ageM, metric, gender);
+  }
+
+  const unit = metric === 'height' ? 'cm' : 'kg';
+  const metricLabel = metric === 'height' ? '키' : '몸무게';
+
+  svgEl.innerHTML = `
+    <polygon points="${bandPts}" fill="#FF8040" opacity="0.06"/>
+    ${yLabels}
+    ${polyline(gd.P3,  '#E8E0D8', '3,3', 1)}
+    ${polyline(gd.P50, '#C8BFBA', '4,3', 1.5)}
+    ${polyline(gd.P97, '#E8E0D8', '3,3', 1)}
+    <text x="${xS(24) - 2}" y="${yS(gd.P97[24]) - 3}" font-size="7" fill="#C8BFBA" text-anchor="end">97</text>
+    <text x="${xS(24) - 2}" y="${yS(gd.P50[24]) - 3}" font-size="7" fill="#C8BFBA" text-anchor="end">50</text>
+    <text x="${xS(24) - 2}" y="${yS(gd.P3[24])  + 9}" font-size="7" fill="#C8BFBA" text-anchor="end">3</text>
+    ${lineSvg}
+    ${dotsSvg}
+    ${xLabels}
+    <line x1="${L}" y1="${T}" x2="${L}" y2="${T + cH}" stroke="#e0e0e0" stroke-width="1"/>
+    <line x1="${L}" y1="${T + cH}" x2="${L + cW}" y2="${T + cH}" stroke="#e0e0e0" stroke-width="1"/>
+  `;
+
+  // Percentile badge
+  if (latestPct && records.length > 0) {
+    const last = records[records.length - 1];
+    badgeEl.innerHTML = `<div class="growth-pct-row">
+      <div class="growth-pct-icon">${latestPct.emoji}</div>
+      <div>
+        <div class="growth-pct-label">${metricLabel} ${last[metric]}${unit} · ${latestPct.label}</div>
+        <div class="growth-pct-sub">또래 중 ${latestPct.pct}번째 백분위 (WHO 성장 기준)</div>
+      </div>
+    </div>`;
+  } else {
+    badgeEl.innerHTML = `<div class="rpt-empty" style="padding:10px">+ 기록 버튼으로 ${metricLabel}을 추가하면 곡선에 표시돼요</div>`;
+  }
+
+  // Records list
+  const sorted = [...(STATE.growth || [])].filter(r => r[metric]).sort((a, b) => b.date.localeCompare(a.date));
+  recListEl.innerHTML = sorted.length === 0 ? '' :
+    `<div style="font-size:11px;color:var(--text-light);font-weight:700;margin-bottom:4px">기록 내역</div>` +
+    sorted.map(r => `<div class="growth-rec-row">
+      <span class="growth-rec-date">${r.date}</span>
+      <span class="growth-rec-vals">${metric === 'height' ? `키 ${r.height}cm` : `${r.weight}kg`}</span>
+      <button class="growth-rec-del" data-gid="${r.id}" aria-label="삭제">✕</button>
+    </div>`).join('');
+}
+
+function renderHealthIssuesList() {
+  const el = document.getElementById('rpt-issues');
+  if (!el) return;
+  const logs = [...(STATE.health.logs || [])].sort((a, b) => (b.date + b.time).localeCompare(a.date + a.time)).slice(0, 8);
+  if (logs.length === 0) {
+    el.innerHTML = '<div class="rpt-empty">건강 기록이 없어요<br>건강기록 탭에서 추가해보세요</div>';
+    return;
+  }
+  const typeMap = { temp: '🌡️ 체온', rash: '🔴 발진', symptom: '😷 증상', other: '📝 기타' };
+  el.innerHTML = logs.map(l => `
+    <div class="rpt-issue-card">
+      <div class="rpt-issue-top">
+        <span class="rpt-issue-type">${typeMap[l.type] || l.type}</span>
+        <span class="rpt-issue-date">${l.date} ${l.time}</span>
+      </div>
+      <div class="rpt-issue-detail">${l.detail}</div>
+      ${l.photo ? `<img class="rpt-issue-photo" src="${l.photo}" alt="건강 기록 사진">` : ''}
+    </div>`).join('');
+}
+
+function renderReport() {
+  const infoEl = document.getElementById('rpt-baby-info');
+  if (!infoEl) return;
+
+  if (!STATE.baby) {
+    infoEl.textContent = '아기 정보를 먼저 등록해주세요';
+    return;
+  }
+
+  const ai = getAgeInfo(STATE.baby.birthDate);
+  const ageText = ai ? `${ai.months}개월` : '';
+  infoEl.textContent = `${STATE.baby.name} · ${ageText} · ${STATE.baby.gender === 'girl' ? '여아' : '남아'}`;
+
+  renderActivityChart(reportMode);
+  renderGrowthSVG(growthMetric);
+  renderHealthIssuesList();
+}
+
+function initReportEvents() {
+  // Mode toggle (7일 / 월 평균)
+  document.getElementById('rpt-mode-seg')?.addEventListener('click', e => {
+    const btn = e.target.closest('.rpt-seg-btn');
+    if (!btn) return;
+    reportMode = btn.dataset.rmode;
+    document.querySelectorAll('#rpt-mode-seg .rpt-seg-btn').forEach(b => b.classList.toggle('active', b === btn));
+    renderActivityChart(reportMode);
+  });
+
+  // Growth metric toggle (키 / 몸무게)
+  document.getElementById('rpt-gmet-seg')?.addEventListener('click', e => {
+    const btn = e.target.closest('.rpt-seg-btn');
+    if (!btn) return;
+    growthMetric = btn.dataset.gmet;
+    document.querySelectorAll('#rpt-gmet-seg .rpt-seg-btn').forEach(b => b.classList.toggle('active', b === btn));
+    renderGrowthSVG(growthMetric);
+  });
+
+  // Add growth record form toggle
+  const growthForm = document.getElementById('growth-form');
+  document.getElementById('add-growth-btn')?.addEventListener('click', () => {
+    growthForm.style.display = growthForm.style.display === 'none' ? 'block' : 'none';
+    if (growthForm.style.display === 'block') {
+      document.getElementById('g-date').value = todayStr();
+    }
+  });
+  document.getElementById('g-cancel')?.addEventListener('click', () => {
+    growthForm.style.display = 'none';
+  });
+  document.getElementById('g-save')?.addEventListener('click', () => {
+    const date   = document.getElementById('g-date').value;
+    const height = parseFloat(document.getElementById('g-height').value);
+    const weight = parseFloat(document.getElementById('g-weight').value);
+    if (!date) { showToast('날짜를 입력해주세요'); return; }
+    if (!height && !weight) { showToast('키 또는 몸무게를 입력해주세요'); return; }
+    if (!STATE.growth) STATE.growth = [];
+    const existing = STATE.growth.find(r => r.date === date);
+    if (existing) {
+      if (!isNaN(height)) existing.height = height;
+      if (!isNaN(weight)) existing.weight = weight;
+    } else {
+      STATE.growth.push({
+        id: uid(), date,
+        height: isNaN(height) ? undefined : height,
+        weight: isNaN(weight) ? undefined : weight,
+      });
+    }
+    saveState();
+    growthForm.style.display = 'none';
+    document.getElementById('g-height').value = '';
+    document.getElementById('g-weight').value = '';
+    showToast('📏 성장 기록이 저장됐어요!');
+    renderGrowthSVG(growthMetric);
+  });
+
+  // Delete growth record
+  document.getElementById('growth-records')?.addEventListener('click', e => {
+    const btn = e.target.closest('.growth-rec-del');
+    if (!btn) return;
+    STATE.growth = (STATE.growth || []).filter(r => r.id !== btn.dataset.gid);
+    saveState();
+    renderGrowthSVG(growthMetric);
+  });
+
+  // Download (print → PDF)
+  document.getElementById('rpt-download')?.addEventListener('click', () => {
+    switchHTab('report');
+    setTimeout(() => window.print(), 200);
+  });
+
+  // Share
+  function buildShareText() {
+    if (!STATE.baby) return '';
+    const ai = getAgeInfo(STATE.baby.birthDate);
+    const ageText = ai ? `${ai.months}개월` : '';
+    const last = [...(STATE.growth || [])].sort((a, b) => b.date.localeCompare(a.date))[0];
+    const issues = (STATE.health.logs || []).slice(-3).map(l => `• [${l.date}] ${l.detail}`).join('\n');
+    return `📋 ${STATE.baby.name} (${ageText}) 아기 리포트\n\n` +
+      `📏 최근 성장\n${last ? `키 ${last.height || '-'}cm / 몸무게 ${last.weight || '-'}kg (${last.date})` : '기록 없음'}\n\n` +
+      `🩺 최근 건강 이슈\n${issues || '없음'}\n\n베이비케어 앱으로 생성됨`;
+  }
+
+  function openShareSheet() {
+    const text = buildShareText();
+    const overlay = document.getElementById('share-overlay');
+    overlay.style.display = 'flex';
+
+    // 이메일
+    document.getElementById('sh-email').onclick = () => {
+      const subject = encodeURIComponent(`${STATE.baby?.name || '아기'} 리포트`);
+      window.location.href = `mailto:?subject=${subject}&body=${encodeURIComponent(text)}`;
+      overlay.style.display = 'none';
+    };
+
+    // 카카오톡 (카카오 URL 스킴 → 미지원 시 카카오 공유 웹)
+    const kakaoEl = document.getElementById('sh-kakao');
+    const kakaoText = encodeURIComponent(text);
+    kakaoEl.href = `kakaotalk://send?text=${kakaoText}`;
+    kakaoEl.onclick = () => setTimeout(() => { overlay.style.display = 'none'; }, 300);
+
+    // 닥터나우는 기존 href 그대로
+    document.getElementById('sh-doctornow').onclick = () => { overlay.style.display = 'none'; };
+
+    // 링크(텍스트) 복사
+    document.getElementById('sh-copy').onclick = async () => {
+      try {
+        await navigator.clipboard.writeText(text);
+        showToast('📋 리포트 내용이 복사됐어요!');
+      } catch {
+        showToast('복사에 실패했어요');
+      }
+      overlay.style.display = 'none';
+    };
+
+    document.getElementById('sh-cancel').onclick = () => { overlay.style.display = 'none'; };
+    overlay.onclick = (e) => { if (e.target === overlay) overlay.style.display = 'none'; };
+  }
+
+  document.getElementById('rpt-share')?.addEventListener('click', async () => {
+    if (!STATE.baby) { showToast('아기 정보를 먼저 등록해주세요'); return; }
+    const text = buildShareText();
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: `${STATE.baby.name} 아기 리포트`, text });
+        return;
+      } catch { /* 취소 또는 미지원 */ }
+    }
+    openShareSheet();
+  });
+}
+
 // ── MILESTONE CALENDAR ────────────────────────────────────────
 
 const MILESTONES = [
@@ -1718,6 +2302,8 @@ function init() {
   renderHome();
   maybeAddSampleTodos();
   initMilestoneCalendar();
+  initReportEvents();
+  initKeywordPicker();
 
   // Refresh header every minute
   setInterval(updateHeader, 60000);

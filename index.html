@@ -232,6 +232,29 @@
             </div>
           </div>
 
+          <!-- 맞춤 키워드 -->
+          <div class="section-card" id="shop-card">
+            <div class="section-header">
+              <h3 class="section-title">우리아이 맞춤 키워드 확인</h3>
+              <span class="shop-age-badge" id="shop-age-badge"></span>
+            </div>
+            <div class="shop-keywords" id="shop-keywords"></div>
+            <div class="shop-platforms" id="shop-grid"></div>
+          </div>
+
+          <!-- 키워드 검색 픽커 -->
+          <div id="kw-picker-overlay" class="kw-picker-overlay" style="display:none">
+            <div class="kw-picker-sheet">
+              <div class="kw-picker-keyword" id="kw-picker-label"></div>
+              <div class="kw-picker-btns">
+                <a class="kw-picker-btn kw-yt"  id="kw-yt"  target="_blank" rel="noopener noreferrer">🎬 YouTube에서 검색</a>
+                <a class="kw-picker-btn kw-dg"  id="kw-dg"  target="_blank" rel="noopener noreferrer">🥕 당근마켓에서 찾기</a>
+                <a class="kw-picker-btn kw-mg"  id="kw-mg"  target="_blank" rel="noopener noreferrer">🧴 맘가이드로 확인</a>
+              </div>
+              <button class="share-cancel" id="kw-picker-cancel">닫기</button>
+            </div>
+          </div>
+
           <!-- 육아 달력 -->
           <div class="section-card" id="milestone-cal-card">
             <div class="section-header">
@@ -262,6 +285,7 @@
           <button class="h-tab active" data-htab="development" role="tab">발달체크</button>
           <button class="h-tab" data-htab="logs" role="tab">건강기록</button>
           <button class="h-tab" data-htab="medication" role="tab">복약정보</button>
+          <button class="h-tab" data-htab="report" role="tab">📋 리포트</button>
         </div>
 
         <!-- Development Tab -->
@@ -327,6 +351,72 @@
                 </div>
               </div>
             </div>
+          </div>
+        </div>
+
+        <!-- Report Tab -->
+        <div id="report-tab" class="h-section page-scroll">
+          <!-- Hero -->
+          <div class="section-card rpt-hero">
+            <div class="rpt-title-row">
+              <div>
+                <div class="rpt-title">📋 아기 리포트</div>
+                <div id="rpt-baby-info" class="rpt-baby-info"></div>
+              </div>
+              <div class="rpt-actions">
+                <button class="rpt-act-btn" id="rpt-download">⬇️<span>다운로드</span></button>
+                <button class="rpt-act-btn" id="rpt-share">🔗<span>공유</span></button>
+                <a href="https://doctornow.co.kr" target="_blank" rel="noopener noreferrer" class="rpt-act-btn rpt-act-dr">🏥<span>닥터나우</span></a>
+              </div>
+            </div>
+          </div>
+
+          <!-- 1. Activity Pattern -->
+          <div class="section-card">
+            <div class="section-header">
+              <h3 class="section-title">📊 생활 패턴</h3>
+              <div class="rpt-seg" id="rpt-mode-seg">
+                <button class="rpt-seg-btn active" data-rmode="week">7일</button>
+                <button class="rpt-seg-btn" data-rmode="month">월 평균</button>
+              </div>
+            </div>
+            <div id="activity-legend" class="activity-legend"></div>
+            <div id="activity-chart" class="activity-chart"></div>
+          </div>
+
+          <!-- 2. Growth Chart -->
+          <div class="section-card">
+            <div class="section-header">
+              <h3 class="section-title">📏 성장 곡선</h3>
+              <button class="btn-secondary" id="add-growth-btn">+ 기록</button>
+            </div>
+            <div class="rpt-seg" id="rpt-gmet-seg" style="margin-bottom:12px">
+              <button class="rpt-seg-btn active" data-gmet="height">키 (cm)</button>
+              <button class="rpt-seg-btn" data-gmet="weight">몸무게 (kg)</button>
+            </div>
+            <!-- Inline growth record form -->
+            <div id="growth-form" class="growth-form" style="display:none">
+              <div class="growth-input-row">
+                <input type="date" id="g-date" class="growth-in">
+                <input type="number" id="g-height" class="growth-in" placeholder="키 (cm)" min="30" max="130" step="0.1">
+                <input type="number" id="g-weight" class="growth-in" placeholder="몸무게 (kg)" min="1" max="30" step="0.01">
+              </div>
+              <div style="display:flex;gap:8px;margin-top:8px">
+                <button class="btn-primary" style="flex:1" id="g-save">저장</button>
+                <button class="btn-secondary" id="g-cancel">취소</button>
+              </div>
+            </div>
+            <div class="growth-chart-wrap">
+              <svg id="growth-svg" viewBox="0 0 300 180" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet"></svg>
+            </div>
+            <div id="growth-percentile-badge"></div>
+            <div id="growth-records" class="growth-records"></div>
+          </div>
+
+          <!-- 3. Health Issues -->
+          <div class="section-card" style="margin-bottom:12px">
+            <h3 class="section-title" style="margin-bottom:12px">🩺 최근 건강 이슈</h3>
+            <div id="rpt-issues" class="rpt-issues"></div>
           </div>
         </div>
       </section>
@@ -411,5 +501,18 @@
   </div><!-- /#app -->
 
   <script src="app.js"></script>
+  <!-- Share Sheet -->
+  <div id="share-overlay" class="share-overlay" style="display:none" aria-modal="true">
+    <div class="share-sheet">
+      <div class="share-sheet-title">공유하기</div>
+      <div class="share-sheet-grid">
+        <button class="share-opt" id="sh-email"><span class="share-opt-icon">📧</span><span>이메일</span></button>
+        <a  class="share-opt" id="sh-kakao" href="#"><span class="share-opt-icon">💬</span><span>카카오톡</span></a>
+        <a  class="share-opt" id="sh-doctornow" href="https://doctornow.co.kr" target="_blank" rel="noopener noreferrer"><span class="share-opt-icon">🏥</span><span>닥터나우</span></a>
+        <button class="share-opt" id="sh-copy"><span class="share-opt-icon">📋</span><span>링크복사</span></button>
+      </div>
+      <button class="share-cancel" id="sh-cancel">취소</button>
+    </div>
+  </div>
 </body>
 </html>
